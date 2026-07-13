@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#1f2933" />
+  <title>SurveyARCam — 外業勘查相機</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        onerror="window.__leafletCssFailed=true" />
+  <link rel="stylesheet" href="css/app.css" />
+</head>
+<body>
+
+  <!-- 載入資料畫面 -->
+  <section id="screen-load" class="screen">
+    <div class="load-inner">
+      <h1>SurveyARCam</h1>
+      <p class="sub">外業勘查 AR 導引相機</p>
+      <p class="hint">本網頁不含任何案件資料。請載入點位 JSON：</p>
+
+      <label class="file-label">
+        匯入 JSON 檔
+        <input type="file" id="file-input" accept=".json,application/json" hidden />
+      </label>
+
+      <textarea id="paste-area" placeholder="或在此貼上 points.json 內容…"></textarea>
+      <button id="paste-btn" class="btn primary block">載入貼上的 JSON</button>
+
+      <p id="load-error" class="error hidden"></p>
+
+      <button id="sample-btn" class="btn ghost block">載入範例資料（示意，非本案）</button>
+      <p class="foot">格式見 POINTS_SCHEMA.md。桌機測試請加 <code>?mock=1</code>。</p>
+    </div>
+  </section>
+
+  <!-- 主應用 -->
+  <section id="app" class="hidden">
+    <header class="topbar">
+      <div class="topbar-title" id="project-name">—</div>
+      <span id="mock-badge" class="mock-badge hidden">MOCK</span>
+      <button id="reload-btn" class="link-btn">載入其他</button>
+    </header>
+
+    <div id="gps-banner" class="banner hidden">定位未啟用：清單不排序、不做到點提示。可於瀏覽器允許定位權限。</div>
+
+    <!-- 清單分頁 -->
+    <div id="view-list" class="view">
+      <div id="filters" class="filters"></div>
+      <div id="list" class="list"></div>
+    </div>
+
+    <!-- 地圖分頁 -->
+    <div id="view-map" class="view hidden">
+      <div id="map"></div>
+      <div id="map-fallback" class="map-fallback hidden">
+        <p>地圖元件（Leaflet）載入失敗，可能是無網路。</p>
+        <p>請改用「點位」分頁的清單模式，功能不受影響。</p>
+      </div>
+    </div>
+
+    <!-- 底部分頁列 -->
+    <nav class="tabbar">
+      <button class="tab active" data-tab="list">點位</button>
+      <button class="tab" data-tab="map">地圖</button>
+    </nav>
+  </section>
+
+  <!-- 點位詳情（覆蓋層） -->
+  <div id="view-detail" class="overlay hidden">
+    <header class="topbar">
+      <button id="detail-back" class="link-btn">‹ 返回</button>
+      <div class="topbar-title">點位詳情</div>
+      <span></span>
+    </header>
+    <div class="overlay-body">
+      <div class="detail-head">
+        <span id="detail-badge" class="badge"></span>
+        <h2 id="detail-name"></h2>
+      </div>
+      <p id="detail-note" class="detail-note"></p>
+      <p id="detail-dist" class="detail-dist"></p>
+      <h3>拍攝清單</h3>
+      <div id="detail-shots" class="shots"></div>
+      <div class="detail-btns">
+        <button id="detail-nav" class="btn">導航</button>
+        <button id="detail-ar" class="btn primary">AR 拍攝</button>
+        <button id="detail-reset" class="btn ghost">重設此點進度</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AR 拍攝（全螢幕） -->
+  <div id="view-ar" class="ar hidden">
+    <video id="ar-video" playsinline autoplay muted></video>
+
+    <div class="ar-top">
+      <button id="ar-back" class="ar-icon">‹</button>
+      <div class="ar-top-info">
+        <span id="ar-cat" class="badge"></span>
+        <span id="ar-name" class="ar-name"></span>
+        <span id="ar-note" class="ar-note"></span>
+      </div>
+    </div>
+
+    <div class="ar-guide">
+      <div id="ar-arrow" class="ar-arrow hidden">▲</div>
+      <div id="ar-dir-text" class="ar-dir-text"></div>
+    </div>
+
+    <div class="ar-shotbar">
+      <button id="ar-prev" class="ar-nav">‹</button>
+      <div class="ar-shot-center">
+        <div id="ar-shot-label" class="ar-shot-label"></div>
+        <div id="ar-shot-idx" class="ar-shot-idx"></div>
+      </div>
+      <button id="ar-next" class="ar-nav">›</button>
+    </div>
+
+    <div id="ar-done-banner" class="ar-done hidden">此點完成 ✔</div>
+
+    <div class="ar-bottom">
+      <span id="ar-acc" class="ar-acc">GPS --</span>
+      <button id="ar-shutter" class="ar-shutter" aria-label="拍照"></button>
+      <button id="ar-finish" class="btn ghost small">完成此點</button>
+    </div>
+
+    <button id="ar-share" class="ar-share hidden">分享 / 存到相簿</button>
+
+    <div id="ar-error" class="ar-error hidden">
+      <p id="ar-error-msg">無法啟動相機</p>
+      <button id="ar-retry" class="btn primary">重試</button>
+      <button id="ar-back2" class="btn ghost" onclick="document.getElementById('ar-back').click()">返回</button>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          onerror="window.__leafletFailed=true"></script>
+  <script src="js/geo.js"></script>
+  <script src="js/camera.js"></script>
+  <script src="js/mock.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

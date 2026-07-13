@@ -1,0 +1,57 @@
+{
+  "project": "梧棲示意案（範例資料，非實際點位）",
+  "version": 1,
+  "arrivalRadius": 30,
+  "categories": {
+    "baseland": {
+      "label": "基準地",
+      "color": "#D64545",
+      "shots": ["臨路狀況", "面寬", "縱深", "周邊發展-左", "周邊發展-右", "對面街景"]
+    },
+    "compare": {
+      "label": "比較標的",
+      "color": "#3B7DD8",
+      "shots": ["外觀街景", "臨路狀況"]
+    },
+    "income": {
+      "label": "收益標的",
+      "color": "#2E9E5B",
+      "shots": ["建物外觀", "出入口", "樓層/招牌"]
+    }
+  },
+  "points": [
+    {
+      "id": "BL-01",
+      "name": "梧棲段示意點",
+      "category": "baseland",
+      "lat": 24.2545,
+      "lng": 120.5318,
+      "note": "商業區示意，非實際地號",
+      "bearingHints": { "臨路狀況": 0 }
+    },
+    {
+      "id": "BL-02",
+      "name": "永安段示意點",
+      "category": "baseland",
+      "lat": 24.2400,
+      "lng": 120.5480,
+      "note": "工業區示意"
+    },
+    {
+      "id": "CP-01",
+      "name": "市鎮南段示意點",
+      "category": "compare",
+      "lat": 24.2500,
+      "lng": 120.5400,
+      "note": "比較案例示意"
+    },
+    {
+      "id": "IC-01",
+      "name": "大仁路二段示意點",
+      "category": "income",
+      "lat": 24.2560,
+      "lng": 120.5450,
+      "note": "收益標的示意 5樓之3"
+    }
+  ]
+}
