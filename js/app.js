@@ -148,6 +148,58 @@
     showApp();
   }
 
+  // ---------- 分享連結（hash #d=base64url(UTF-8 JSON)） ----------
+  function base64UrlToBytes(b64url) {
+    let b64 = String(b64url).replace(/-/g, '+').replace(/_/g, '/');
+    const pad = b64.length % 4;
+    if (pad === 1) throw new Error('base64 長度不合法');
+    if (pad === 2) b64 += '==';
+    else if (pad === 3) b64 += '=';
+    const bin = atob(b64); // 字元不合法時丟 DOMException
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  }
+
+  // 解析 location.hash（含或不含開頭 #），回傳：
+  //   {ok:true, data, jsonText}                 — 有 d= 且成功解出合法 JSON
+  //   {ok:false, error:''}                       — 沒有 d= 參數（非錯誤，交給下一順位）
+  //   {ok:false, error:'中文錯誤訊息'}            — 有 d= 但解碼/解析失敗
+  function decodeHashData(hash) {
+    try {
+      const h = String(hash || '').replace(/^#/, '');
+      if (!h) return { ok: false, error: '' };
+      const params = new URLSearchParams(h);
+      const raw = params.get('d');
+      if (!raw) return { ok: false, error: '' };
+
+      let bytes;
+      try {
+        bytes = base64UrlToBytes(raw);
+      } catch (e) {
+        return { ok: false, error: '連結內的點位資料無法解析（base64 格式錯誤）' };
+      }
+
+      let jsonText;
+      try {
+        jsonText = new TextDecoder('utf-8').decode(bytes);
+      } catch (e) {
+        return { ok: false, error: '連結內的點位資料無法解析（文字編碼錯誤）' };
+      }
+
+      let d;
+      try {
+        d = JSON.parse(jsonText);
+      } catch (e) {
+        return { ok: false, error: '連結內的點位資料無法解析（JSON 格式錯誤）' };
+      }
+
+      return { ok: true, data: d, jsonText };
+    } catch (e) {
+      return { ok: false, error: '連結內的點位資料無法解析' };
+    }
+  }
+
   async function loadFromUrl(url) {
     const res = await fetch(url, { cache: 'no-store' });
     if (!res.ok) throw new Error('下載失敗：HTTP ' + res.status);
@@ -749,6 +801,23 @@
     bindEvents();
     if (mock) $('#mock-badge').classList.remove('hidden');
 
+    // 優先序 1：hash 分享連結 #d=（不清 hash，方便再轉傳）
+    const hashResult = decodeHashData(location.hash);
+    if (hashResult.ok) {
+      try {
+        applyData(hashResult.data, hashResult.jsonText);
+        return;
+      } catch (e) {
+        showLoadScreen();
+        showLoadError('連結內的點位資料無法解析：' + e.message);
+        return;
+      }
+    } else if (hashResult.error) {
+      showLoadScreen();
+      showLoadError(hashResult.error);
+      return;
+    }
+
     const params = new URLSearchParams(location.search);
     const dataUrl = params.get('data');
 
@@ -776,5 +845,8 @@
   document.addEventListener('DOMContentLoaded', boot);
 
   // 匯出給測試/除錯
-  window.__app = { state, validateData, shotsForPoint, sanitizeFilePart, hashStr };
+  window.__app = {
+    state, validateData, shotsForPoint, sanitizeFilePart, hashStr,
+    decodeHashData, base64UrlToBytes,
+  };
 })();

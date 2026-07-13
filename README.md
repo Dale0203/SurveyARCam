@@ -16,13 +16,28 @@
 
 ## 資料載入（隱私設計）
 
-本網頁是**通用外殼**，不含任何案件資料。點位 JSON 三種載入方式（優先序）：
+本網頁是**通用外殼**，不含任何案件資料。點位 JSON 四種載入方式（優先序）：
 
-1. 網址參數 `?data=<JSON網址>`（放私人 gist / 自家主機）
-2. 上次載入的快取（localStorage）
-3. 頁內「匯入檔案 / 貼上 JSON」
+1. 分享連結 `#d=<base64url JSON>`（見下方「分享連結」）
+2. 網址參數 `?data=<JSON網址>`（放私人 gist / 自家主機）
+3. 上次載入的快取（localStorage）
+4. 頁內「匯入檔案 / 貼上 JSON」
 
 JSON 格式見 [POINTS_SCHEMA.md](POINTS_SCHEMA.md)，範例在 `data/sample_points.json`（示意資料，非本案）。
+
+## 分享連結
+
+點位資料可直接編碼進網址的 hash（`#d=...`），同事點連結手機就自動載入，不用傳檔案：
+
+- 格式：`https://.../SurveyARCam/#d=<base64url(UTF-8 JSON)>`
+  （base64url = 標準 base64 把 `+/` 換成 `-_`、去掉結尾 `=` padding）
+- [SurveyPointBuilder](../SurveyPointBuilder/README.md) 產出點位時會自動寫一份 `分享連結.txt`，
+  裡面就是這種完整網址，直接複製傳 LINE 即可。
+- 開頁時會先看網址 hash 有沒有 `d=`，解碼成功就直接載入並存進 localStorage 快取；
+  解碼或資料格式失敗會顯示中文錯誤訊息，並保留手動匯入介面可用。
+- 載入成功後 hash **不會被清掉**，同一條連結可以再轉傳給別人。
+- hash 資料量大時網址會很長（中文點位多時常見數千字元），多數通訊軟體/瀏覽器仍吃得下；
+  若真的過長（SurveyPointBuilder 會在產生時警告），改用「網址參數 `?data=`」或「匯入檔案」。
 
 ## 部署（GitHub Pages）
 
