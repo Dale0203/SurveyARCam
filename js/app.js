@@ -14,6 +14,7 @@
     filterCat: 'all',
     pos: null,           // {lat,lng,accuracy}
     heading: null,       // 濾波後 heading（度）
+    pitch: null,         // 簡化俯仰角（度，0=水平），供 AR 浮動標記垂直定位
     compassAvailable: false,
     gpsDenied: false,
     arrivedShown: {},    // pointId -> 是否已顯示到達 toast
@@ -35,6 +36,14 @@
   };
 
   const mock = MockNS.isMock();
+
+  // ---------- AR 浮動目標標記設定 ----------
+  const AR_FOV_DEG = 60;        // 相機水平視角（度），可調
+  const AR_PITCH_RANGE_DEG = 45; // 俯仰角映射到畫面上下滿版的範圍（簡化，非精確 FOV）
+  const AR_NEAR_DIST_M = 40;    // 低於此距離顯示「GPS 誤差大」警語
+  const AR_MARKER_MODE_KEY = 'surveyarcam:arMarkerMode';
+  const AR_WATERMARK_MODE_KEY = 'surveyarcam:arWatermarkMode'; // 拍照浮水印開關（獨立於標記開關）
+  const AR_ANNOTATED_SUFFIX = '_標註'; // 帶浮水印照片的檔名後綴（放在 .jpg 前）
 
   // ---------- 工具 ----------
   const $ = (sel) => document.querySelector(sel);
@@ -419,8 +428,10 @@
     if (!$('#view-list').classList.contains('hidden')) renderList();
     if (!$('#view-detail').classList.contains('hidden')) updateDetailDist();
     if (state.map) updateMapMe();
-    if (!$('#view-ar').classList.contains('hidden')) $('#ar-acc').textContent =
-      'GPS ±' + Math.round(pos.accuracy) + ' m';
+    if (!$('#view-ar').classList.contains('hidden')) {
+      $('#ar-acc').textContent = 'GPS ±' + Math.round(pos.accuracy) + ' m';
+      updateArMarker();
+    }
   }
 
   function onGpsError(err) {
@@ -433,10 +444,14 @@
     if (mock) return new MockNS.MockCompass(onHeading);
     return new G.Compass(onHeading);
   }
-  function onHeading(filtered) {
+  function onHeading(filtered, raw, pitch) {
     state.heading = filtered;
+    if (typeof pitch === 'number' && !isNaN(pitch)) state.pitch = pitch;
     state.compassAvailable = true;
-    if (!$('#view-ar').classList.contains('hidden')) updateArHeading();
+    if (!$('#view-ar').classList.contains('hidden')) {
+      updateArHeading();
+      updateArMarker();
+    }
   }
 
   // ---------- AR 拍攝 ----------
@@ -477,8 +492,11 @@
       showArError(e.message || '無法啟動相機');
       return;
     }
+    renderArMarkerToggle();
+    renderArWatermarkToggle();
     renderArShot();
     updateArHeading();
+    updateArMarker();
   }
 
   function showArError(msg) {
@@ -552,6 +570,101 @@
     }
   }
 
+  // ---------- AR 浮動目標標記（寶可夢GO式，純 DOM/CSS 疊層，不進入拍照 canvas） ----------
+  function getArMarkerMode() {
+    try {
+      return localStorage.getItem(AR_MARKER_MODE_KEY) === 'off' ? 'off' : 'on';
+    } catch (e) { return 'on'; }
+  }
+  function setArMarkerMode(mode) {
+    try { localStorage.setItem(AR_MARKER_MODE_KEY, mode); } catch (e) { /* 容量不足時忽略 */ }
+  }
+
+  // ---------- 拍照浮水印開關（開=帶標註照片、關=乾淨照片供報告書用） ----------
+  function getArWatermarkMode() {
+    try {
+      return localStorage.getItem(AR_WATERMARK_MODE_KEY) === 'off' ? 'off' : 'on';
+    } catch (e) { return 'on'; }
+  }
+  function setArWatermarkMode(mode) {
+    try { localStorage.setItem(AR_WATERMARK_MODE_KEY, mode); } catch (e) { /* 容量不足時忽略 */ }
+  }
+  function renderArWatermarkToggle() {
+    const btn = $('#ar-wm-toggle');
+    if (!btn) return;
+    const on = getArWatermarkMode() === 'on';
+    btn.classList.toggle('active', on);
+    btn.textContent = on ? '標註：開' : '標註：關';
+    btn.title = on
+      ? '照片帶浮水印標註（檔名加' + AR_ANNOTATED_SUFFIX + '）；點擊切換為乾淨照片'
+      : '照片乾淨無浮水印（報告書格式）；點擊切換為帶標註';
+  }
+
+  // 目標相對方位角：正值＝目標在目前朝向的右側，負值＝左側；回傳 -180..180
+  function computeRelAz(bearingToTarget, heading) {
+    return G.angleDiff(bearingToTarget, heading);
+  }
+
+  // relAz/pitch → 畫面座標比例 {xRatio, yRatio}（0..1）；超出水平 FOV 回傳 null（交給既有邊緣箭頭）
+  function projectToScreen(relAz, pitch, fovDeg) {
+    const half = fovDeg / 2;
+    if (Math.abs(relAz) > half) return null;
+    const xRatio = relAz / fovDeg + 0.5;
+    const p = Math.max(-AR_PITCH_RANGE_DEG, Math.min(AR_PITCH_RANGE_DEG, pitch || 0));
+    // 世界錨定：相機往上仰（pitch 正）時，地平線高度的目標在畫面中往下移（yRatio 變大），
+    // 與水平方向同理（右轉→目標左移），是反向補償
+    const yRatio = 0.5 + p / (AR_PITCH_RANGE_DEG * 2);
+    return { xRatio, yRatio };
+  }
+
+  function renderArMarkerToggle() {
+    const btn = $('#ar-marker-toggle');
+    if (!btn) return;
+    const on = getArMarkerMode() === 'on';
+    btn.classList.toggle('active', on);
+    btn.textContent = on ? '📍' : '📍✕';
+    btn.title = on ? '浮動標記：開（點擊關閉）' : '浮動標記：關（點擊開啟）';
+  }
+
+  function updateArMarker() {
+    const wrap = $('#ar-marker');
+    if (!wrap) return;
+    const p = state.ar.point;
+    if (!p || getArMarkerMode() === 'off') {
+      wrap.classList.add('hidden');
+      return;
+    }
+    if (!state.pos || !state.compassAvailable || state.heading == null) {
+      wrap.classList.add('hidden');
+      return;
+    }
+
+    const dist = G.haversine(state.pos.lat, state.pos.lng, p.lat, p.lng);
+    const bearingToTarget = G.bearing(state.pos.lat, state.pos.lng, p.lat, p.lng);
+    const relAz = computeRelAz(bearingToTarget, state.heading);
+    const proj = projectToScreen(relAz, state.pitch, AR_FOV_DEG);
+
+    if (!proj) {
+      wrap.classList.add('hidden'); // FOV 外：維持既有邊緣箭頭（updateArHeading）行為，不畫浮動標記
+      return;
+    }
+
+    const stage = $('#view-ar');
+    const rect = stage.getBoundingClientRect();
+    const w = rect.width || window.innerWidth;
+    const h = rect.height || window.innerHeight;
+
+    wrap.classList.remove('hidden');
+    wrap.style.left = (proj.xRatio * w).toFixed(1) + 'px';
+    wrap.style.top = (proj.yRatio * h).toFixed(1) + 'px';
+
+    const cat = state.data.categories[p.category];
+    $('#ar-marker-pin').style.background = cat.color;
+    $('#ar-marker-name').textContent = p.name;
+    $('#ar-marker-dist').textContent = distText(dist);
+    $('#ar-marker-warn').classList.toggle('hidden', dist >= AR_NEAR_DIST_M);
+  }
+
   function twoDigit(n) { return (n < 10 ? '0' : '') + n; }
   function nowParts() {
     const d = new Date();
@@ -583,25 +696,32 @@
     const line = p.name + SEP + cat.label + SEP + shot + SEP + dirStr + SEP +
       coordStr + SEP + t.ymd + ' ' + t.hmColon;
 
+    // 浮水印開關：開=帶標註（現行行為）、關=乾淨影格（報告書格式）
+    // drawWatermark 對空陣列直接 return，不畫任何東西 → 乾淨照片
+    const annotated = getArWatermarkMode() === 'on';
+    const wmLines = annotated ? [line] : [];
+
     const video = $('#ar-video');
     let blob;
     try {
       if (video.videoWidth) {
-        blob = await CamNS.capture(video, [line]);
+        blob = await CamNS.capture(video, wmLines);
       } else if (state.ar.stream && state.ar.stream.__mockCanvas) {
-        blob = await CamNS.captureFromCanvas(state.ar.stream.__mockCanvas, [line]);
+        blob = await CamNS.captureFromCanvas(state.ar.stream.__mockCanvas, wmLines);
       } else {
-        blob = await CamNS.capture(video, [line]);
+        blob = await CamNS.capture(video, wmLines);
       }
     } catch (e) {
       toast('拍照失敗：' + (e.message || e));
       return;
     }
 
-    // 檔名：{name}_{categoryLabel}_{shot}_{HHmm}.jpg
+    // 檔名：{name}_{categoryLabel}_{shot}_{HHmm}.jpg（乾淨照維持既有契約）
+    // 帶標註照加後綴：{name}_{categoryLabel}_{shot}_{HHmm}_標註.jpg
     const filename = sanitizeFilePart(p.name) + '_' +
       sanitizeFilePart(cat.label) + '_' +
-      sanitizeFilePart(shot) + '_' + t.hm + '.jpg';
+      sanitizeFilePart(shot) + '_' + t.hm +
+      (annotated ? AR_ANNOTATED_SUFFIX : '') + '.jpg';
 
     CamNS.download(blob, filename);
 
@@ -774,6 +894,17 @@
     $('#ar-prev').onclick = arPrev;
     $('#ar-finish').onclick = exitAr;
     $('#ar-retry').onclick = () => { if (state.detailPoint) enterAr(state.detailPoint); };
+    $('#ar-marker-toggle').onclick = () => {
+      setArMarkerMode(getArMarkerMode() === 'off' ? 'on' : 'off');
+      renderArMarkerToggle();
+      updateArMarker();
+    };
+    $('#ar-wm-toggle').onclick = () => {
+      const next = getArWatermarkMode() === 'off' ? 'on' : 'off';
+      setArWatermarkMode(next);
+      renderArWatermarkToggle();
+      toast(next === 'on' ? '拍照將帶標註浮水印（檔名加_標註）' : '拍照為乾淨照片（報告書格式）');
+    };
 
     // AR 觸控滑動切換項目
     let tx = null;
@@ -848,5 +979,8 @@
   window.__app = {
     state, validateData, shotsForPoint, sanitizeFilePart, hashStr,
     decodeHashData, base64UrlToBytes,
+    computeRelAz, projectToScreen, AR_FOV_DEG, AR_PITCH_RANGE_DEG, AR_NEAR_DIST_M,
+    getArMarkerMode, setArMarkerMode, updateArMarker,
+    getArWatermarkMode, setArWatermarkMode, AR_ANNOTATED_SUFFIX,
   };
 })();

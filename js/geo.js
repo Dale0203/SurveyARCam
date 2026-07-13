@@ -117,10 +117,14 @@
   };
 
   // ---- 羅盤 ----
-  // onHeading(filteredDeg, rawDeg)
+  // onHeading(filteredDeg, rawDeg, pitchDeg)
+  // pitchDeg：簡化俯仰角，0=水平、負=往下看、正=往上看（供 AR 浮動標記垂直定位用，非精確高程）
   function Compass(onHeading) {
     this.onHeading = onHeading;
     this.filter = new HeadingFilter(0.25);
+    this.pitchAlpha = 0.25;
+    this.pitchFiltered = null;
+    this.pitch = null;
     this.started = false;
     this._handler = this._handler.bind(this);
     this.available = false;
@@ -163,7 +167,20 @@
     if (heading === null || isNaN(heading)) return;
     this.available = true;
     const filtered = this.filter.push(heading);
-    this.onHeading(filtered, heading);
+
+    // 俯仰角（簡化）：e.beta 手機直立握持時約 90，往下看變小、往上看變大
+    let pitch = this.pitch;
+    if (typeof e.beta === 'number' && !isNaN(e.beta)) {
+      let raw = e.beta - 90;
+      raw = Math.max(-90, Math.min(90, raw));
+      pitch = this.pitchFiltered === null
+        ? raw
+        : this.pitchFiltered + this.pitchAlpha * (raw - this.pitchFiltered);
+      this.pitchFiltered = pitch;
+    }
+    this.pitch = pitch;
+
+    this.onHeading(filtered, heading, pitch);
   };
 
   window.Geo = {

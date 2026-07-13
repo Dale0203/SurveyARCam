@@ -39,10 +39,12 @@
     this.timer = null;
   };
 
-  // 假 heading：每秒 +10°
+  // 假 heading：每秒 +10°；假 pitch：緩慢正弦擺動，方便桌機測試觀察標記垂直移動
   function MockCompass(onHeading) {
     this.onHeading = onHeading;
     this.h = 0;
+    this.t = 0;
+    this.pitch = 0;
     this.timer = null;
     this.available = true;
     this.filter = new window.Geo.HeadingFilter(0.5);
@@ -51,7 +53,9 @@
   MockCompass.prototype.start = function () {
     const tick = () => {
       this.h = (this.h + 10) % 360;
-      this.onHeading(this.filter.push(this.h), this.h);
+      this.t += 1;
+      this.pitch = 15 * Math.sin(this.t / 4); // -15..15 度緩慢擺動
+      this.onHeading(this.filter.push(this.h), this.h, this.pitch);
     };
     tick();
     this.timer = setInterval(tick, 1000);

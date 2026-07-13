@@ -100,11 +100,22 @@
         <span id="ar-name" class="ar-name"></span>
         <span id="ar-note" class="ar-note"></span>
       </div>
+      <button id="ar-marker-toggle" class="ar-icon ar-marker-toggle" title="浮動標記">📍</button>
     </div>
 
     <div class="ar-guide">
       <div id="ar-arrow" class="ar-arrow hidden">▲</div>
       <div id="ar-dir-text" class="ar-dir-text"></div>
+    </div>
+
+    <!-- 浮動目標標記（純 DOM/CSS 疊層，取景輔助用，不會出現在拍出的照片檔案裡） -->
+    <div id="ar-marker" class="ar-marker hidden">
+      <div id="ar-marker-pin" class="ar-marker-pin"></div>
+      <div class="ar-marker-label">
+        <span id="ar-marker-name" class="ar-marker-name"></span>
+        <span id="ar-marker-dist" class="ar-marker-dist"></span>
+        <span id="ar-marker-warn" class="ar-marker-warn hidden">近距離GPS誤差大，以現場為準</span>
+      </div>
     </div>
 
     <div class="ar-shotbar">
@@ -117,6 +128,9 @@
     </div>
 
     <div id="ar-done-banner" class="ar-done hidden">此點完成 ✔</div>
+
+    <!-- 拍照浮水印開關：開=帶標註照片(檔名加_標註)、關=乾淨照片(報告書檔名契約) -->
+    <button id="ar-wm-toggle" class="ar-wm-toggle">標註：開</button>
 
     <div class="ar-bottom">
       <span id="ar-acc" class="ar-acc">GPS --</span>

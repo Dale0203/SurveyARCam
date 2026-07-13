@@ -142,9 +142,11 @@ code { background: #eee; padding: 1px 5px; border-radius: 4px; }
 }
 .ar-icon { background: rgba(0,0,0,.4); color: #fff; border: none; width: 38px; height: 38px;
   border-radius: 50%; font-size: 24px; line-height: 1; cursor: pointer; }
-.ar-top-info { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.ar-top-info { display: flex; flex: 1; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
 .ar-name { font-weight: 700; font-size: 16px; }
 .ar-note { font-size: 12px; color: #d0d0d0; width: 100%; }
+.ar-marker-toggle { flex-shrink: 0; font-size: 18px; opacity: .65; }
+.ar-marker-toggle.active { opacity: 1; background: rgba(26,115,232,.55); }
 
 .ar-guide {
   position: absolute; top: 22%; left: 0; right: 0; z-index: 2;
@@ -160,6 +162,30 @@ code { background: #eee; padding: 1px 5px; border-radius: 4px; }
   font-size: 15px; font-weight: 700;
 }
 .ar-dir-text.correct { background: rgba(24,160,88,.85); }
+
+/* ---- AR 浮動目標標記（寶可夢GO式，DOM/CSS 疊層；絕不進入拍照 canvas） ---- */
+.ar-marker {
+  position: absolute; left: 0; top: 0; z-index: 2;
+  display: flex; flex-direction: column; align-items: center;
+  pointer-events: none; /* 不擋快門/操作 */
+  transform: translate(-50%, -100%);
+  transition: left .12s linear, top .12s linear;
+}
+.ar-marker-pin {
+  width: 26px; height: 26px; border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  border: 2px solid #fff;
+  box-shadow: 0 2px 6px rgba(0,0,0,.55);
+}
+.ar-marker-label {
+  margin-top: 6px; background: rgba(0,0,0,.6); color: #fff;
+  padding: 4px 10px; border-radius: 10px; font-size: 12px; text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  max-width: 160px;
+}
+.ar-marker-name { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
+.ar-marker-dist { color: #ffd54a; font-weight: 700; }
+.ar-marker-warn { color: #ff6b6b; font-size: 10px; white-space: normal; }
 
 .ar-shotbar {
   position: absolute; bottom: 150px; left: 0; right: 0; z-index: 2;
@@ -193,6 +219,15 @@ code { background: #eee; padding: 1px 5px; border-radius: 4px; }
 }
 .ar-shutter:active { transform: scale(.94); }
 .ar-bottom .btn.small { width: 80px; color: #fff; border-color: rgba(255,255,255,.5); }
+
+/* 拍照浮水印開關：靠右、快門上方偏側，避免誤觸快門；開=實心、關=空心 */
+.ar-wm-toggle {
+  position: absolute; right: 16px; bottom: 112px; z-index: 3;
+  border: 2px solid #ffd54a; background: rgba(0,0,0,.35); color: #ffd54a;
+  border-radius: 999px; padding: 7px 14px; font-size: 13px; font-weight: 800;
+  cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,.4);
+}
+.ar-wm-toggle.active { background: #ffd54a; color: #1f2933; }
 
 .ar-share {
   position: absolute; bottom: 100px; left: 50%; transform: translateX(-50%); z-index: 3;
