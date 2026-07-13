@@ -272,7 +272,9 @@
       pts.forEach((p) => {
         p._dist = G.haversine(state.pos.lat, state.pos.lng, p.lat, p.lng);
       });
-      pts.sort((a, b) => a._dist - b._dist);
+      // 注意：原本這裡有 pts.sort((a,b)=>a._dist-b._dist) 按距離重排，
+      // 會打亂 points 陣列的巡迴順序（route_to_points 已排好路線序），已移除。
+      // 距離只計算供顯示，清單一律維持 points 原順序。
     }
     return pts;
   }
@@ -316,8 +318,9 @@
           '<button class="btn nav">導航</button>' +
           '<button class="btn primary go">開始勘查</button>' +
         '</div>';
-      card.querySelector('.nav').onclick = () => navTo(p);
-      card.querySelector('.go').onclick = () => openDetail(p);
+      // stopPropagation：導航絕不可誤觸開始勘查/AR 等其他動作
+      card.querySelector('.nav').onclick = (e) => { e.stopPropagation(); navTo(p); };
+      card.querySelector('.go').onclick = (e) => { e.stopPropagation(); openDetail(p); };
       wrap.appendChild(card);
     });
     if (!pts.length) wrap.innerHTML = '<p class="empty">此篩選沒有點位</p>';
@@ -328,9 +331,10 @@
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   }
 
+  // Google Maps 導航：不帶 origin（手機用自身 GPS 當起點）、開車模式、新分頁
   function navTo(p) {
     const url = 'https://www.google.com/maps/dir/?api=1&destination=' +
-      p.lat + ',' + p.lng;
+      p.lat + ',' + p.lng + '&travelmode=driving';
     window.open(url, '_blank');
   }
 
@@ -982,5 +986,6 @@
     computeRelAz, projectToScreen, AR_FOV_DEG, AR_PITCH_RANGE_DEG, AR_NEAR_DIST_M,
     getArMarkerMode, setArMarkerMode, updateArMarker,
     getArWatermarkMode, setArWatermarkMode, AR_ANNOTATED_SUFFIX,
+    navTo, sortedFilteredPoints,
   };
 })();
