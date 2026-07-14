@@ -153,8 +153,13 @@
     border-bottom: 40px solid rgba(26,115,232,.38);
     transform-origin: 50% 100%;
   }
-  .me-char { width: 44px; height: 58px; pointer-events: none; }
-  .me-char svg { display: block; width: 100%; height: 100%; filter: drop-shadow(0 1px 2px rgba(0,0,0,.35)); }
+  .me-char { width: 44px; height: 64px; pointer-events: none; }
+  .me-char svg { display: none; width: 100%; height: 100%; filter: drop-shadow(0 1px 2px rgba(0,0,0,.35)); }
+  /* 四朝向：三張圖預建 DOM 用 data-facing 切 display；左側＝側面鏡射 */
+  .me-char[data-facing="back"] .v-back { display: block; }
+  .me-char[data-facing="front"] .v-front { display: block; }
+  .me-char[data-facing="right"] .v-side { display: block; }
+  .me-char[data-facing="left"] .v-side { display: block; transform: scaleX(-1); }
 </style>
 </head>
 <body>
@@ -628,41 +633,124 @@
   groundEl.innerHTML = '<div class="me-shadow"></div><div class="me-fan" id="me-fan" style="display:none"></div>';
   const groundMarker = new maplibregl.Marker({ element: groundEl, rotationAlignment: 'map', pitchAlignment: 'map' });
 
-  // 看板小人：外業背心 Q 版角色，雙手持相機在胸前（內嵌 SVG，無外部資源）
+  // 看板小人：外業背心 Q 版角色，雙手舉高過頭握相機（內嵌 SVG，無外部資源）。
+  // 三張視角圖（背/正/側）啟動時就建進 DOM，之後只切 data-facing（CSS display），不重建節點；
+  // 左側視角＝側面圖 CSS scaleX(-1) 鏡射。
+  const CHAR_SKIN = '#f6c9a0', CHAR_SKIN_DK = '#dfa87c', CHAR_HAIR = '#4a3628',
+        CHAR_VEST = '#f5871f', CHAR_STRIPE = '#ffd23e',
+        CHAR_PANT = '#3a4551', CHAR_PANT_DK = '#313b46', CHAR_SHOE = '#23282e',
+        CHAR_CAM = '#2d3238';
+
+  // 共用軀幹（背/正視角同款）：腿、鞋、舉高雙臂與雙手、背心＋反光條
+  const CHAR_TORSO =
+    '<rect x="15.2" y="43" width="5.5" height="13" rx="2.2" fill="' + CHAR_PANT + '"/>' +
+    '<rect x="23.3" y="43" width="5.5" height="13" rx="2.2" fill="' + CHAR_PANT + '"/>' +
+    '<rect x="13.8" y="54.4" width="8" height="4.8" rx="2.3" fill="' + CHAR_SHOE + '"/>' +
+    '<rect x="22.2" y="54.4" width="8" height="4.8" rx="2.3" fill="' + CHAR_SHOE + '"/>' +
+    '<path d="M15 31 Q10 20 17.5 10.5" stroke="' + CHAR_SKIN + '" stroke-width="4" fill="none" stroke-linecap="round"/>' +
+    '<path d="M29 31 Q34 20 26.5 10.5" stroke="' + CHAR_SKIN + '" stroke-width="4" fill="none" stroke-linecap="round"/>' +
+    '<circle cx="17.5" cy="10" r="2.2" fill="' + CHAR_SKIN + '"/>' +
+    '<circle cx="26.5" cy="10" r="2.2" fill="' + CHAR_SKIN + '"/>' +
+    '<rect x="13.5" y="28.5" width="17" height="16" rx="4.2" fill="' + CHAR_VEST + '"/>' +
+    '<rect x="13.5" y="32.5" width="17" height="2.4" fill="' + CHAR_STRIPE + '"/>' +
+    '<rect x="13.5" y="39" width="17" height="2.4" fill="' + CHAR_STRIPE + '"/>';
+
+  // 背面：後腦勺全髮＋兩耳、相機背面（觀景螢幕）
+  const CHAR_SVG_BACK =
+    '<svg class="v-back" viewBox="0 0 44 64" xmlns="http://www.w3.org/2000/svg" aria-label="我的位置（背面）">' +
+    CHAR_TORSO +
+    '<circle cx="22" cy="20.5" r="7.8" fill="' + CHAR_HAIR + '"/>' +
+    '<circle cx="14.6" cy="21" r="1.7" fill="' + CHAR_SKIN + '"/>' +
+    '<circle cx="29.4" cy="21" r="1.7" fill="' + CHAR_SKIN + '"/>' +
+    '<rect x="16" y="2" width="12" height="8.5" rx="1.8" fill="' + CHAR_CAM + '"/>' +
+    '<rect x="18" y="3.8" width="8" height="4.6" rx="0.8" fill="#6b7683"/>' +
+    '</svg>';
+
+  // 正面：瀏海＋雙眼、相機正面（鏡頭＋紅快門鈕）
+  const CHAR_SVG_FRONT =
+    '<svg class="v-front" viewBox="0 0 44 64" xmlns="http://www.w3.org/2000/svg" aria-label="我的位置（正面）">' +
+    CHAR_TORSO +
+    '<circle cx="22" cy="20.5" r="7.8" fill="' + CHAR_SKIN + '"/>' +
+    '<path d="M14.2 20.5 Q14.2 12.7 22 12.7 Q29.8 12.7 29.8 20.5 Q29.8 17.3 22 17 Q14.2 17.3 14.2 20.5 Z" fill="' + CHAR_HAIR + '"/>' +
+    '<circle cx="19" cy="22.3" r="1.1" fill="#2d2d2d"/>' +
+    '<circle cx="25" cy="22.3" r="1.1" fill="#2d2d2d"/>' +
+    '<rect x="16" y="2" width="12" height="8.5" rx="1.8" fill="' + CHAR_CAM + '"/>' +
+    '<circle cx="22" cy="6.2" r="2.6" fill="#171a1d"/>' +
+    '<circle cx="22" cy="6.2" r="1.5" fill="#4f7cae"/>' +
+    '<circle cx="21.3" cy="5.4" r="0.6" fill="#bcd6ee"/>' +
+    '<rect x="25.6" y="3.2" width="1.6" height="1.3" rx="0.4" fill="#e5554f"/>' +
+    '</svg>';
+
+  // 側面（畫右側身，左側由 CSS 鏡射）：後臂/後腿深色、頭髮包後半、單眼靠前緣、
+  // 側身背心較窄、相機側面鏡頭朝右（行進方向）
+  const CHAR_SVG_SIDE =
+    '<svg class="v-side" viewBox="0 0 44 64" xmlns="http://www.w3.org/2000/svg" aria-label="我的位置（側面）">' +
+    '<path d="M20.5 31 Q16 20 20 11.5" stroke="' + CHAR_SKIN_DK + '" stroke-width="3.6" fill="none" stroke-linecap="round"/>' +
+    '<rect x="16.8" y="43" width="5.2" height="13" rx="2.2" fill="' + CHAR_PANT_DK + '"/>' +
+    '<rect x="15.6" y="54.4" width="8.2" height="4.8" rx="2.3" fill="' + CHAR_SHOE + '"/>' +
+    '<rect x="20.8" y="43" width="5.5" height="13" rx="2.2" fill="' + CHAR_PANT + '"/>' +
+    '<rect x="20" y="54.4" width="9.4" height="4.8" rx="2.3" fill="' + CHAR_SHOE + '"/>' +
+    '<rect x="15.5" y="28.5" width="13.5" height="16" rx="4" fill="' + CHAR_VEST + '"/>' +
+    '<rect x="15.5" y="32.5" width="13.5" height="2.4" fill="' + CHAR_STRIPE + '"/>' +
+    '<rect x="15.5" y="39" width="13.5" height="2.4" fill="' + CHAR_STRIPE + '"/>' +
+    '<circle cx="22" cy="20.5" r="7.8" fill="' + CHAR_SKIN + '"/>' +
+    '<path d="M22 12.7 A7.8 7.8 0 0 0 14.2 20.5 A7.8 7.8 0 0 0 22 28.3 Z" fill="' + CHAR_HAIR + '"/>' +
+    '<rect x="17" y="12.4" width="9.5" height="3.4" rx="1.7" fill="' + CHAR_HAIR + '"/>' +
+    '<circle cx="26.6" cy="21.2" r="1.1" fill="#2d2d2d"/>' +
+    '<path d="M23.5 31 Q28.5 20 24.5 11" stroke="' + CHAR_SKIN + '" stroke-width="4" fill="none" stroke-linecap="round"/>' +
+    '<rect x="18.5" y="3" width="9.5" height="7.2" rx="1.6" fill="' + CHAR_CAM + '"/>' +
+    '<rect x="27.6" y="4.6" width="3.2" height="4" rx="1" fill="#171a1d"/>' +
+    '<circle cx="24.5" cy="10.2" r="2.2" fill="' + CHAR_SKIN + '"/>' +
+    '</svg>';
+
   const charEl = document.createElement('div');
   charEl.className = 'me-char';
-  charEl.innerHTML =
-    '<svg viewBox="0 0 44 58" xmlns="http://www.w3.org/2000/svg" aria-label="我的位置">' +
-    // 腿 + 鞋
-    '<rect x="15" y="35" width="5.5" height="15" rx="2.2" fill="#3a4551"/>' +
-    '<rect x="23.5" y="35" width="5.5" height="15" rx="2.2" fill="#3a4551"/>' +
-    '<rect x="13.6" y="49" width="8" height="5" rx="2.4" fill="#23282e"/>' +
-    '<rect x="22.4" y="49" width="8" height="5" rx="2.4" fill="#23282e"/>' +
-    // 身體：外業背心（橘）＋ 反光條（黃）
-    '<rect x="12.5" y="18.5" width="19" height="18.5" rx="4.5" fill="#f5871f"/>' +
-    '<rect x="12.5" y="23.5" width="19" height="2.6" fill="#ffd23e"/>' +
-    '<rect x="12.5" y="31.5" width="19" height="2.6" fill="#ffd23e"/>' +
-    // 手臂（膚色，往胸前收）
-    '<path d="M13.5 22 Q10 26 16 28.5" stroke="#f6c9a0" stroke-width="4" fill="none" stroke-linecap="round"/>' +
-    '<path d="M30.5 22 Q34 26 28 28.5" stroke="#f6c9a0" stroke-width="4" fill="none" stroke-linecap="round"/>' +
-    // 相機（深灰機身＋鏡頭＋觀景窗；縮小讓橘背心露出）
-    '<rect x="16.5" y="25.5" width="11" height="8" rx="1.8" fill="#2d3238"/>' +
-    '<rect x="18.5" y="24" width="5" height="2.2" rx="0.9" fill="#2d3238"/>' +
-    '<circle cx="22" cy="29.5" r="2.8" fill="#171a1d"/>' +
-    '<circle cx="22" cy="29.5" r="1.6" fill="#4f7cae"/>' +
-    '<circle cx="21.2" cy="28.6" r="0.6" fill="#bcd6ee"/>' +
-    '<rect x="25.4" y="26.6" width="1.6" height="1.3" rx="0.4" fill="#e5554f"/>' +
-    // 手（握相機兩側）
-    '<circle cx="16.5" cy="29.5" r="2.2" fill="#f6c9a0"/>' +
-    '<circle cx="27.5" cy="29.5" r="2.2" fill="#f6c9a0"/>' +
-    // 頭 + 頭髮
-    '<circle cx="22" cy="10.5" r="8.2" fill="#f6c9a0"/>' +
-    '<path d="M13.8 10.5 Q13.8 2.3 22 2.3 Q30.2 2.3 30.2 10.5 Q30.2 7.2 22 6.8 Q13.8 7.2 13.8 10.5 Z" fill="#4a3628"/>' +
-    // 眼睛（面向使用者）
-    '<circle cx="19" cy="11.5" r="1.1" fill="#2d2d2d"/>' +
-    '<circle cx="25" cy="11.5" r="1.1" fill="#2d2d2d"/>' +
-    '</svg>';
+  charEl.dataset.facing = 'back'; // 全無方向資料時固定背面
+  charEl.innerHTML = CHAR_SVG_BACK + CHAR_SVG_FRONT + CHAR_SVG_SIDE;
   const meMarker = new maplibregl.Marker({ element: charEl, anchor: 'bottom' }); // viewport 對齊＝billboard
+
+  // ---- 四方向切換：relAngle = (heading − mapBearing) 正規化 0–360 ----
+  // 分區：315–45 背面、45–135 右側、135–225 正面、225–315 左側；
+  // hysteresis ±10°：目標分區與現值不同時，要離新分區「中心」≤35°（＝越過邊界 10° 以上）才切，
+  // 避免在邊界（如 45°）附近抖動狂切。
+  const FACING_CENTER = { back: 0, right: 90, front: 180, left: 270 };
+  const FACING_HYST_DEG = 10;
+  let facing = 'back';
+  let moveHeading = null;   // 無羅盤時的移動方向 fallback
+  let lastMovePos = null;   // 上一個 GPS 位置（算移動方向用）
+
+  function angDist(a, b) {
+    const d = Math.abs(a - b) % 360;
+    return d > 180 ? 360 - d : d;
+  }
+
+  function effectiveHeading() {
+    if (heading != null) return heading;   // 羅盤優先
+    return moveHeading;                    // 沒羅盤用移動方向；再沒有回 null（固定背面）
+  }
+
+  function setFacing(f) {
+    if (facing === f) return;
+    facing = f;
+    charEl.dataset.facing = f; // 只切 CSS，不重建節點
+  }
+
+  function updateFacing() {
+    const h = effectiveHeading();
+    if (h == null) { setFacing('back'); return; }
+    const rel = ((h - map.getBearing()) % 360 + 360) % 360;
+    let target;
+    if (rel >= 315 || rel < 45) target = 'back';
+    else if (rel < 135) target = 'right';
+    else if (rel < 225) target = 'front';
+    else target = 'left';
+    if (target !== facing && angDist(rel, FACING_CENTER[target]) <= 45 - FACING_HYST_DEG) {
+      setFacing(target);
+    }
+  }
+
+  map.on('rotate', updateFacing);
+  map.on('rotateend', updateFacing);
 
   function updateMe(lat, lng) {
     meLngLat = [lng, lat];
@@ -672,6 +760,23 @@
     } else {
       groundMarker.setLngLat(meLngLat);
       meMarker.setLngLat(meLngLat);
+    }
+
+    // 無羅盤時用移動方向當 heading fallback（移動 >2m 才更新，靜止沿用上次值）
+    if (lastMovePos) {
+      const moved = haversine(lastMovePos.lat, lastMovePos.lng, lat, lng);
+      if (moved > 2) {
+        moveHeading = bearingOf(lastMovePos.lat, lastMovePos.lng, lat, lng);
+        lastMovePos = { lat, lng };
+        if (heading == null) {
+          groundMarker.setRotation(moveHeading); // 腳下扇形也跟移動方向
+          const fan = $('#me-fan');
+          if (fan) fan.style.display = 'block';
+        }
+        updateFacing();
+      }
+    } else {
+      lastMovePos = { lat, lng };
     }
 
     if (followMode) {
@@ -689,7 +794,8 @@
     heading = h;
     const fan = $('#me-fan');
     if (fan) fan.style.display = 'block';
-    groundMarker.setRotation(h); // 只轉腳下扇形，小人本體維持看板不旋轉
+    groundMarker.setRotation(h); // 只轉腳下扇形，小人本體不旋轉（用換圖表現朝向）
+    updateFacing();
     if (followMode && meLngLat) {
       map.easeTo({ bearing: h, duration: 400 });
     }
@@ -809,6 +915,11 @@
   }
 
   window.__mapReady = map; // 供驗收腳本讀取
+  window.__test = {       // 驗收 hook：直接餵 heading 檢查朝向切換
+    setHeading: (h) => updateHeading(h),
+    getFacing: () => facing,
+    updateFacing,
+  };
 })().catch((e) => {
   console.error('[init error]', e);
   const el = document.getElementById('toast');
