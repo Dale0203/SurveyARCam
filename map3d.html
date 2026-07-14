@@ -154,19 +154,37 @@
     transform-origin: 50% 100%;
   }
   .me-char { width: 44px; height: 64px; pointer-events: none; }
-  .me-char svg { display: none; width: 100%; height: 100%; filter: drop-shadow(0 1px 2px rgba(0,0,0,.35)); }
-  /* 四朝向：三張圖預建 DOM 用 data-facing 切 display；左側＝側面鏡射 */
-  .me-char[data-facing="back"] .v-back { display: block; }
-  .me-char[data-facing="front"] .v-front { display: block; }
-  .me-char[data-facing="right"] .v-side { display: block; }
-  .me-char[data-facing="left"] .v-side { display: block; transform: scaleX(-1); }
-  /* 行走動畫：腿 ±25°、手臂 ±10° 前後交錯擺（0.6s 週期）。
-     只動 transform（GPU 合成、不觸發 layout）；transform-box 讓旋轉軸落在髖/肩。 */
-  .me-char .leg-l, .me-char .leg-r, .me-char .arm-l, .me-char .arm-r {
+  .me-char .char-flip { position: relative; width: 100%; height: 100%; }
+  /* 8 朝向 × 5 張圖：全部疊在同位置、opacity 交叉淡化 120ms（只動 opacity，GPU 合成）。
+     data-facing 決定哪張 opacity:1；左向系列＝整個 char-flip scaleX(-1)
+     （背/正圖近對稱，鏡射無感；不能掛 charEl 因為 MapLibre 會覆寫其 inline transform）。 */
+  .me-char svg {
+    position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+    opacity: 0; transition: opacity .12s linear;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,.35));
+  }
+  .me-char.no-fade svg { transition: none; } /* 連續快切時直接跳結束態，避免殘影疊加 */
+  .me-char[data-facing="back"] .v-back,
+  .me-char[data-facing="front"] .v-front,
+  .me-char[data-facing="right"] .v-side,
+  .me-char[data-facing="left"] .v-side,
+  .me-char[data-facing="front-right"] .v-qfront,
+  .me-char[data-facing="front-left"] .v-qfront,
+  .me-char[data-facing="back-right"] .v-qback,
+  .me-char[data-facing="back-left"] .v-qback { opacity: 1; }
+  .me-char[data-facing="left"] .char-flip,
+  .me-char[data-facing="front-left"] .char-flip,
+  .me-char[data-facing="back-left"] .char-flip { transform: scaleX(-1); }
+  /* 行走動畫：腿 ±25°（髖轉軸）、舉高手臂小幅 ±6°（肩轉軸，避免甩臂打臉），0.6s 交錯。
+     只動 transform（GPU 合成、不觸發 layout）；五張視角圖的腿/臂 group 同名 class，動畫全部生效。 */
+  .me-char .leg-l, .me-char .leg-r {
     transform-box: fill-box; transform-origin: 50% 8%;
   }
+  .me-char .arm-l, .me-char .arm-r {
+    transform-box: fill-box; transform-origin: 50% 88%;
+  }
   @keyframes walk-swing     { 0%, 100% { transform: rotate(-25deg); } 50% { transform: rotate(25deg); } }
-  @keyframes walk-swing-arm { 0%, 100% { transform: rotate(-10deg); } 50% { transform: rotate(10deg); } }
+  @keyframes walk-swing-arm { 0%, 100% { transform: rotate(-6deg); } 50% { transform: rotate(6deg); } }
   .me-char.walking .leg-l { animation: walk-swing .6s ease-in-out infinite; }
   .me-char.walking .leg-r { animation: walk-swing .6s ease-in-out infinite -.3s; }
   .me-char.walking .arm-l { animation: walk-swing-arm .6s ease-in-out infinite -.3s; }
@@ -661,15 +679,22 @@
       '</defs>';
   }
 
-  // 背/正視角共用軀幹：圓腿（動畫 group）、圓身、自然下垂微張手臂（動畫 group）、圓頭
+  // 背/正視角共用軀幹：圓腿（動畫 group）、圓身、雙手舉高高（Y 字型，45° 外開，
+  // capsule 手臂＋末端小圓手，動畫 group）、圓頭
   function clayBody(sfx) {
     const f = 'url(#clay' + sfx + ')';
     return clayDefs(sfx) +
       '<g class="leg-l"><rect x="15.6" y="45" width="5.6" height="14" rx="2.8" fill="' + f + '"/></g>' +
       '<g class="leg-r"><rect x="22.8" y="45" width="5.6" height="14" rx="2.8" fill="' + f + '"/></g>' +
       '<ellipse cx="22" cy="37.5" rx="9.2" ry="10.8" fill="' + f + '"/>' +
-      '<g class="arm-l"><rect x="10.6" y="30.5" width="4.4" height="12.5" rx="2.2" transform="rotate(10 12.8 31)" fill="' + f + '"/></g>' +
-      '<g class="arm-r"><rect x="29" y="30.5" width="4.4" height="12.5" rx="2.2" transform="rotate(-10 31.2 31)" fill="' + f + '"/></g>' +
+      '<g class="arm-l">' +
+      '<rect x="12.4" y="18" width="4.4" height="13.5" rx="2.2" transform="rotate(-45 14.6 30.5)" fill="' + f + '"/>' +
+      '<circle cx="5.8" cy="21.7" r="2.3" fill="' + f + '"/>' +
+      '</g>' +
+      '<g class="arm-r">' +
+      '<rect x="27.2" y="18" width="4.4" height="13.5" rx="2.2" transform="rotate(45 29.4 30.5)" fill="' + f + '"/>' +
+      '<circle cx="38.2" cy="21.7" r="2.3" fill="' + f + '"/>' +
+      '</g>' +
       '<circle cx="22" cy="19" r="10" fill="' + f + '"/>';
   }
 
@@ -705,24 +730,91 @@
     '<ellipse cx="25.4" cy="19.8" rx="1.15" ry="1.6" fill="#6b6b64"/>' +
     camFront() + '</svg>';
 
-  // 側面（右側身，左側由 CSS 鏡射）：後腿稍深做前後層次、身形較窄、單眼靠前緣、鏡頭朝行進方向
+  // 側面（右側身，左側由 CSS 鏡射）：雙臂同樣舉高（Y 字），前臂正常色、後臂略深做層次；
+  // 後腿稍深、身形較窄、單眼靠前緣、鏡頭朝行進方向
   const CHAR_SVG_SIDE = (function () {
     const f = 'url(#clayS)';
     return '<svg class="v-side" viewBox="0 0 44 64" xmlns="http://www.w3.org/2000/svg" aria-label="我的位置（側面）">' +
       clayDefs('S') +
       '<g class="leg-l"><rect x="17.4" y="45" width="5.4" height="14" rx="2.7" fill="#dedacf"/></g>' +
       '<g class="leg-r"><rect x="21.4" y="45" width="5.6" height="14" rx="2.8" fill="' + f + '"/></g>' +
+      // 後臂（略深，往身後斜上舉）
+      '<g class="arm-l">' +
+      '<rect x="18.9" y="14.5" width="4.2" height="16" rx="2.1" transform="rotate(-40 21 30)" fill="#ddd8cd"/>' +
+      '<circle cx="11.4" cy="18.5" r="2.1" fill="#ddd8cd"/>' +
+      '</g>' +
       '<ellipse cx="22" cy="37.5" rx="7.6" ry="10.8" fill="' + f + '"/>' +
-      '<g class="arm-r"><rect x="20" y="30.5" width="4.4" height="12.5" rx="2.2" fill="#eae6dd"/></g>' +
       '<circle cx="22" cy="19" r="10" fill="' + f + '"/>' +
       '<ellipse cx="28.2" cy="19.8" rx="1.1" ry="1.55" fill="#6b6b64"/>' +
+      // 前臂（正常色，往身前斜上舉；畫在頭後面避免遮臉，手掌探出頭緣）
+      '<g class="arm-r">' +
+      '<rect x="20.8" y="14.5" width="4.4" height="16" rx="2.2" transform="rotate(40 23 30)" fill="' + f + '"/>' +
+      '<circle cx="32.6" cy="18.5" r="2.2" fill="' + f + '"/>' +
+      '</g>' +
       camSide() + '</svg>';
+  })();
+
+  // 斜前 3/4（朝右前，左斜由 CSS 鏡射）：遠臂較短居後、近臂全開、雙眼偏右近眼較大、
+  // 鏡頭偏右、頭/身微移做轉身感
+  const CHAR_SVG_QFRONT = (function () {
+    const f = 'url(#clayQF)';
+    return '<svg class="v-qfront" viewBox="0 0 44 64" xmlns="http://www.w3.org/2000/svg" aria-label="我的位置（斜前）">' +
+      clayDefs('QF') +
+      '<g class="leg-l"><rect x="16.8" y="45" width="5.4" height="14" rx="2.7" fill="#e3dfd4"/></g>' +
+      '<g class="leg-r"><rect x="22.6" y="45" width="5.6" height="14" rx="2.8" fill="' + f + '"/></g>' +
+      // 遠臂（左，較短較直、略深，畫在身體後）
+      '<g class="arm-l">' +
+      '<rect x="14.4" y="20.5" width="4.2" height="12" rx="2.1" transform="rotate(-30 16.5 31.5)" fill="#e3dfd4"/>' +
+      '<circle cx="11" cy="21.8" r="2.1" fill="#e3dfd4"/>' +
+      '</g>' +
+      '<ellipse cx="21.6" cy="37.5" rx="8.6" ry="10.8" fill="' + f + '"/>' +
+      // 近臂（右，45° 全開）
+      '<g class="arm-r">' +
+      '<rect x="27.2" y="18" width="4.4" height="13.5" rx="2.2" transform="rotate(45 29.4 30.5)" fill="' + f + '"/>' +
+      '<circle cx="38.2" cy="21.7" r="2.3" fill="' + f + '"/>' +
+      '</g>' +
+      '<circle cx="22.4" cy="19" r="10" fill="' + f + '"/>' +
+      '<ellipse cx="21.8" cy="20" rx="1.05" ry="1.5" fill="#6b6b64"/>' +
+      '<ellipse cx="28" cy="19.8" rx="1.2" ry="1.65" fill="#6b6b64"/>' +
+      '<rect x="16.2" y="3" width="12.6" height="7.8" rx="2" fill="' + CAM_BODY + '"/>' +
+      '<rect x="24.6" y="1.4" width="3" height="2.2" rx="0.9" fill="' + CAM_BODY + '"/>' +
+      '<ellipse cx="26" cy="6.9" rx="2.1" ry="2.4" fill="' + CAM_DARK + '"/>' +
+      '<ellipse cx="26" cy="6.9" rx="1.15" ry="1.35" fill="#4f7cae"/>' +
+      '</svg>';
+  })();
+
+  // 斜後 3/4（朝右後，左斜由 CSS 鏡射）：無五官、遠臂較短居後、近臂全開、
+  // 相機背面螢幕偏左（轉身透視）、頭/身微移
+  const CHAR_SVG_QBACK = (function () {
+    const f = 'url(#clayQB)';
+    return '<svg class="v-qback" viewBox="0 0 44 64" xmlns="http://www.w3.org/2000/svg" aria-label="我的位置（斜後）">' +
+      clayDefs('QB') +
+      '<g class="leg-l"><rect x="16.8" y="45" width="5.4" height="14" rx="2.7" fill="#e3dfd4"/></g>' +
+      '<g class="leg-r"><rect x="22.6" y="45" width="5.6" height="14" rx="2.8" fill="' + f + '"/></g>' +
+      '<g class="arm-l">' +
+      '<rect x="14.4" y="20.5" width="4.2" height="12" rx="2.1" transform="rotate(-30 16.5 31.5)" fill="#e3dfd4"/>' +
+      '<circle cx="11" cy="21.8" r="2.1" fill="#e3dfd4"/>' +
+      '</g>' +
+      '<ellipse cx="21.6" cy="37.5" rx="8.6" ry="10.8" fill="' + f + '"/>' +
+      '<g class="arm-r">' +
+      '<rect x="27.2" y="18" width="4.4" height="13.5" rx="2.2" transform="rotate(45 29.4 30.5)" fill="' + f + '"/>' +
+      '<circle cx="38.2" cy="21.7" r="2.3" fill="' + f + '"/>' +
+      '</g>' +
+      '<circle cx="21.6" cy="19" r="10" fill="' + f + '"/>' +
+      '<rect x="16.2" y="3" width="12.6" height="7.8" rx="2" fill="' + CAM_BODY + '"/>' +
+      '<rect x="18.4" y="1.4" width="3" height="2.2" rx="0.9" fill="' + CAM_BODY + '"/>' +
+      '<rect x="17.4" y="4.6" width="6.8" height="4.4" rx="0.8" fill="#6b7683"/>' +
+      '</svg>';
   })();
 
   const charEl = document.createElement('div');
   charEl.className = 'me-char';
   charEl.dataset.facing = 'back'; // 全無方向資料時固定背面
-  charEl.innerHTML = CHAR_SVG_BACK + CHAR_SVG_FRONT + CHAR_SVG_SIDE;
+  // char-flip 內層包一層做左向鏡射（MapLibre 會直接改 marker 元素的 inline transform，
+  // 鏡射不能掛在 charEl 本身）；5 張視角圖疊在同位置，用 opacity 交叉淡化
+  charEl.innerHTML = '<div class="char-flip">' +
+    CHAR_SVG_BACK + CHAR_SVG_FRONT + CHAR_SVG_SIDE + CHAR_SVG_QFRONT + CHAR_SVG_QBACK +
+    '</div>';
   const meMarker = new maplibregl.Marker({ element: charEl, anchor: 'bottom' }); // viewport 對齊＝billboard
 
   // ---- 行走動畫觸發：GPS 有實際移動就加 .walking，靜止 1.5s 後移除回立正 ----
@@ -734,11 +826,13 @@
     walkTimer = setTimeout(() => charEl.classList.remove('walking'), 1500);
   }
 
-  // ---- 四方向切換：relAngle = (heading − mapBearing) 正規化 0–360 ----
-  // 分區：315–45 背面、45–135 右側、135–225 正面、225–315 左側；
-  // hysteresis ±5°：目標分區與現值不同時，要越過邊界 5° 以上（離新分區中心 ≤40°）才切，
-  // 濾掉邊界抖動、同時保持轉向靈敏。
-  const FACING_CENTER = { back: 0, right: 90, front: 180, left: 270 };
+  // ---- 八方向切換：relAngle = (heading − mapBearing) 正規化 0–360，45° 一格 ----
+  // back(0) / back-right(45) / right(90) / front-right(135) / front(180) /
+  // front-left(225) / left(270) / back-left(315)
+  // hysteresis ±5°：目標分區與現值不同時，要越過邊界 5° 以上
+  // （離新分區中心 ≤22.5−5＝17.5°）才切，濾掉邊界抖動。
+  const FACING_ORDER = ['back', 'back-right', 'right', 'front-right', 'front', 'front-left', 'left', 'back-left'];
+  const FACING_CENTER = { back: 0, 'back-right': 45, right: 90, 'front-right': 135, front: 180, 'front-left': 225, left: 270, 'back-left': 315 };
   const FACING_HYST_DEG = 5;
   let facing = 'back';
   let moveHeading = null;   // 無羅盤時的移動方向 fallback
@@ -754,22 +848,32 @@
     return moveHeading;                    // 沒羅盤用移動方向；再沒有回 null（固定背面）
   }
 
+  // 朝向切換＝改 data-facing（CSS opacity 交叉淡化 120ms，不重建節點）。
+  // 上一次淡化未完成又要切 → 加 .no-fade 讓所有圖直接跳結束態（單次 reflow），
+  // 避免連續快轉時多張殘影疊加。
+  let fadeTimer = null;
   function setFacing(f) {
     if (facing === f) return;
     facing = f;
-    charEl.dataset.facing = f; // 只切 CSS，不重建節點
+    if (fadeTimer) {
+      clearTimeout(fadeTimer);
+      fadeTimer = null;
+      charEl.classList.add('no-fade');
+      charEl.dataset.facing = f;
+      void charEl.offsetWidth; // 讓 no-fade 狀態立刻套用（一次性 reflow，僅快切時）
+      charEl.classList.remove('no-fade');
+    } else {
+      charEl.dataset.facing = f;
+      fadeTimer = setTimeout(() => { fadeTimer = null; }, 130);
+    }
   }
 
   function updateFacing() {
     const h = effectiveHeading();
     if (h == null) { setFacing('back'); return; }
     const rel = ((h - map.getBearing()) % 360 + 360) % 360;
-    let target;
-    if (rel >= 315 || rel < 45) target = 'back';
-    else if (rel < 135) target = 'right';
-    else if (rel < 225) target = 'front';
-    else target = 'left';
-    if (target !== facing && angDist(rel, FACING_CENTER[target]) <= 45 - FACING_HYST_DEG) {
+    const target = FACING_ORDER[Math.round(rel / 45) % 8];
+    if (target !== facing && angDist(rel, FACING_CENTER[target]) <= 22.5 - FACING_HYST_DEG) {
       setFacing(target);
     }
   }
