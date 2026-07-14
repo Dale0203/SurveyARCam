@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<title>SurveyARCam — 3D 傾斜地圖導引</title>
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; height: 100%; font-family: -apple-system, "Microsoft JhengHei", "PingFang TC", sans-serif; }
+  #map { position: absolute; inset: 0; }
+
+  /* ---- 頂部列 ---- */
+  #topbar {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 5;
+    padding: max(10px, env(safe-area-inset-top)) 12px 10px;
+    background: linear-gradient(to bottom, rgba(0,0,0,.55), rgba(0,0,0,0));
+    color: #fff; pointer-events: none;
+  }
+  #topbar h1 { margin: 0; font-size: 16px; font-weight: 700; text-shadow: 0 1px 3px rgba(0,0,0,.6); }
+  #topbar .sub { font-size: 12px; opacity: .85; margin-top: 2px; text-shadow: 0 1px 3px rgba(0,0,0,.6); }
+
+  /* ---- 無資料提示 ---- */
+  #hint {
+    position: absolute; inset: 0; z-index: 20; display: none;
+    align-items: center; justify-content: center; flex-direction: column; gap: 10px;
+    background: rgba(20,20,24,.88); color: #fff; text-align: center; padding: 24px;
+  }
+  #hint.show { display: flex; }
+  #hint .big { font-size: 40px; }
+  #hint p { max-width: 320px; line-height: 1.6; font-size: 14px; opacity: .9; }
+
+  /* ---- 底部/浮動控制鈕 ---- */
+  #controls {
+    position: absolute; right: 12px; bottom: max(16px, env(safe-area-inset-bottom)); z-index: 6;
+    display: flex; flex-direction: column; gap: 10px; align-items: flex-end;
+  }
+  .fab {
+    min-width: 44px; height: 44px; padding: 0 14px; border-radius: 22px; border: none;
+    background: rgba(30,30,34,.85); color: #fff; font-size: 13px; font-weight: 600;
+    display: flex; align-items: center; gap: 6px; box-shadow: 0 2px 8px rgba(0,0,0,.35);
+    backdrop-filter: blur(4px);
+  }
+  .fab:active { background: rgba(60,60,66,.9); }
+  .fab.on { background: #1a73e8; }
+  .fab .ic { font-size: 17px; }
+
+  #status {
+    position: absolute; left: 12px; bottom: max(16px, env(safe-area-inset-bottom)); z-index: 6;
+    background: rgba(20,20,24,.7); color: #fff; font-size: 11px; padding: 6px 10px; border-radius: 8px;
+    max-width: 62vw; line-height: 1.5; pointer-events: none;
+  }
+
+  #toast {
+    position: absolute; left: 50%; top: 70px; transform: translateX(-50%) translateY(-10px);
+    background: rgba(20,20,24,.92); color: #fff; padding: 9px 16px; border-radius: 20px;
+    font-size: 13px; z-index: 30; opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none;
+    max-width: 86vw; text-align: center;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ---- 點位標記 ---- */
+  .mk {
+    width: 30px; height: 30px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
+    border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.45); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .mk span { transform: rotate(45deg); color: #fff; font-weight: 700; font-size: 12px; text-shadow: 0 1px 2px rgba(0,0,0,.4); }
+
+  /* ---- popup ---- */
+  .maplibregl-popup-content { padding: 12px 14px; border-radius: 10px; font-family: inherit; }
+  .pu-title { font-weight: 700; font-size: 14px; margin: 0 0 3px; }
+  .pu-cat { font-size: 11px; color: #666; margin: 0 0 6px; }
+  .pu-note { font-size: 12px; color: #444; margin: 0 0 8px; }
+  .pu-nav {
+    display: inline-flex; align-items: center; gap: 5px; background: #1a73e8; color: #fff;
+    text-decoration: none; padding: 7px 12px; border-radius: 16px; font-size: 12px; font-weight: 600;
+  }
+
+  /* ---- GPS 棋子 ---- */
+  .me-wrap { width: 1px; height: 1px; }
+  .me-dot {
+    position: absolute; left: -11px; top: -11px; width: 22px; height: 22px; border-radius: 50%;
+    background: #1a73e8; border: 3px solid #fff; box-shadow: 0 0 0 3px rgba(26,115,232,.35);
+  }
+  .me-fan {
+    position: absolute; left: -18px; top: -58px; width: 0; height: 0;
+    border-left: 18px solid transparent; border-right: 18px solid transparent;
+    border-bottom: 40px solid rgba(26,115,232,.32);
+    transform-origin: 50% 100%;
+  }
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div id="topbar">
+  <h1 id="proj-name">SurveyARCam 3D 導引</h1>
+  <div class="sub" id="proj-sub">尚未載入點位</div>
+</div>
+
+<div id="hint">
+  <div class="big">📍</div>
+  <p>找不到點位資料。<br>請用 SurveyARCam 產生的「分享連結」開啟本頁（網址需帶 <code>#d=…</code>）。</p>
+</div>
+
+<div id="toast"></div>
+
+<div id="status"></div>
+
+<div id="controls">
+  <button class="fab" id="btn-compass" style="display:none">🧭 啟用方向感應</button>
+  <button class="fab" id="btn-locate"><span class="ic">📍</span>定位</button>
+  <button class="fab" id="btn-follow"><span class="ic">🎮</span>自由瀏覽</button>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // =========================================================
+  // 1. 分享連結解碼（複製自 js/app.js decodeHashData / base64UrlToBytes）
+  // =========================================================
+  function base64UrlToBytes(b64url) {
+    let b64 = String(b64url).replace(/-/g, '+').replace(/_/g, '/');
+    const pad = b64.length % 4;
+    if (pad === 1) throw new Error('base64 長度不合法');
+    if (pad === 2) b64 += '==';
+    else if (pad === 3) b64 += '=';
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  }
+
+  function decodeHashData(hash) {
+    try {
+      const h = String(hash || '').replace(/^#/, '');
+      if (!h) return { ok: false, error: '' };
+      const params = new URLSearchParams(h);
+      const raw = params.get('d');
+      if (!raw) return { ok: false, error: '' };
+
+      let bytes;
+      try { bytes = base64UrlToBytes(raw); }
+      catch (e) { return { ok: false, error: '連結內的點位資料無法解析（base64 格式錯誤）' }; }
+
+      let jsonText;
+      try { jsonText = new TextDecoder('utf-8').decode(bytes); }
+      catch (e) { return { ok: false, error: '連結內的點位資料無法解析（文字編碼錯誤）' }; }
+
+      let d;
+      try { d = JSON.parse(jsonText); }
+      catch (e) { return { ok: false, error: '連結內的點位資料無法解析（JSON 格式錯誤）' }; }
+
+      return { ok: true, data: d, jsonText };
+    } catch (e) {
+      return { ok: false, error: '連結內的點位資料無法解析' };
+    }
+  }
+
+  function validateData(d) {
+    const err = (m) => ({ ok: false, error: m });
+    if (!d || typeof d !== 'object') return err('JSON 根必須是物件');
+    if (!d.project) return err('缺少必填欄位 project');
+    if (!d.categories || typeof d.categories !== 'object') return err('缺少必填欄位 categories');
+    if (!Array.isArray(d.points) || !d.points.length) return err('points 為空或缺少');
+    for (let i = 0; i < d.points.length; i++) {
+      const p = d.points[i];
+      if (!p || typeof p !== 'object') return err('第 ' + (i + 1) + ' 筆點位不是物件');
+      if (!p.id || !p.name || !p.category) return err('第 ' + (i + 1) + ' 筆點位缺少必填欄位');
+      if (!d.categories[p.category]) return err('點位「' + p.id + '」的 category 不存在於 categories');
+      if (typeof p.lat !== 'number' || typeof p.lng !== 'number') return err('點位「' + p.id + '」的 lat/lng 必須是數字');
+    }
+    return { ok: true };
+  }
+
+  // =========================================================
+  // 2. 地理工具（精簡版，取自 js/geo.js）
+  // =========================================================
+  const R_EARTH = 6371000;
+  const rad = (d) => (d * Math.PI) / 180;
+  const deg = (r) => (r * 180) / Math.PI;
+
+  function haversine(lat1, lng1, lat2, lng2) {
+    const dLat = rad(lat2 - lat1), dLng = rad(lng2 - lng1);
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLng / 2) ** 2;
+    return 2 * R_EARTH * Math.asin(Math.min(1, Math.sqrt(a)));
+  }
+  function bearingOf(lat1, lng1, lat2, lng2) {
+    const p1 = rad(lat1), p2 = rad(lat2), dl = rad(lng2 - lng1);
+    const y = Math.sin(dl) * Math.cos(p2);
+    const x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
+    return (deg(Math.atan2(y, x)) + 360) % 360;
+  }
+  function destinationOf(lat, lng, bearingDeg, distM) {
+    const d = distM / R_EARTH, br = rad(bearingDeg);
+    const p1 = rad(lat), l1 = rad(lng);
+    const p2 = Math.asin(Math.sin(p1) * Math.cos(d) + Math.cos(p1) * Math.sin(d) * Math.cos(br));
+    const l2 = l1 + Math.atan2(Math.sin(br) * Math.sin(d) * Math.cos(p1), Math.cos(d) - Math.sin(p1) * Math.sin(p2));
+    return { lat: deg(p2), lng: ((deg(l2) + 540) % 360) - 180 };
+  }
+
+  // =========================================================
+  // 3. 共用小工具
+  // =========================================================
+  const $ = (s) => document.querySelector(s);
+  function toast(msg, ms) {
+    const el = $('#toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => el.classList.remove('show'), ms || 2800);
+  }
+  function setStatus(msg) { $('#status').textContent = msg; }
+
+  const qs = new URLSearchParams(location.search);
+  const mockMode = qs.get('mock') === '1' || qs.has('mock');
+
+  // =========================================================
+  // 4. 解析點位資料
+  // =========================================================
+  const hashResult = decodeHashData(location.hash);
+  let DATA = null;
+  if (hashResult.ok) {
+    const v = validateData(hashResult.data);
+    if (v.ok) {
+      DATA = hashResult.data;
+    } else {
+      toast('點位資料格式錯誤：' + v.error, 5000);
+    }
+  } else if (hashResult.error) {
+    toast(hashResult.error, 5000);
+  }
+
+  if (!DATA) {
+    $('#hint').classList.add('show');
+  } else {
+    $('#proj-name').textContent = DATA.project;
+    $('#proj-sub').textContent = DATA.points.length + ' 個點位・' + (mockMode ? '模擬定位模式' : '');
+  }
+
+  // =========================================================
+  // 5. 建立地圖（OpenFreeMap liberty style，免金鑰）
+  // =========================================================
+  const STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
+
+  let initCenter = [120.9738, 23.9738]; // 台灣中心，無資料時的預設
+  let initZoom = 7;
+  if (DATA) {
+    const lats = DATA.points.map((p) => p.lat), lngs = DATA.points.map((p) => p.lng);
+    initCenter = [(Math.min(...lngs) + Math.max(...lngs)) / 2, (Math.min(...lats) + Math.max(...lats)) / 2];
+    initZoom = 16;
+  }
+
+  const map = new maplibregl.Map({
+    container: 'map',
+    style: STYLE_URL,
+    center: initCenter,
+    zoom: initZoom,
+    pitch: 60,
+    bearing: 0,
+    attributionControl: { compact: true },
+  });
+  map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
+
+  let has3dBuilding = false;
+
+  map.on('load', () => {
+    // 3D 建築：liberty style 已內建 building-3d（fill-extrusion, source-layer building）
+    has3dBuilding = !!map.getLayer('building-3d');
+    if (!has3dBuilding) {
+      // 沒有現成 layer 時，若 openmaptiles 來源存在就自行補一個
+      try {
+        if (map.getSource('openmaptiles')) {
+          map.addLayer({
+            id: 'building-3d-fallback',
+            type: 'fill-extrusion',
+            source: 'openmaptiles',
+            'source-layer': 'building',
+            minzoom: 14,
+            paint: {
+              'fill-extrusion-color': '#c9c2b6',
+              'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 6],
+              'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
+              'fill-extrusion-opacity': 0.8,
+            },
+          });
+          has3dBuilding = true;
+        }
+      } catch (e) { /* style 沒有可用來源，放棄 3D 建築 */ }
+    }
+    window.__has3dBuilding = has3dBuilding; // 供驗收腳本讀取
+
+    if (DATA) {
+      addMarkers();
+      fitToPoints();
+      buildRoute();
+    }
+  });
+
+  map.on('error', (e) => {
+    console.error('[map error]', e && e.error);
+  });
+
+  // =========================================================
+  // 6. 點位標記
+  // =========================================================
+  function addMarkers() {
+    DATA.points.forEach((p, i) => {
+      const cat = DATA.categories[p.category] || {};
+      const color = cat.color || '#1a73e8';
+      const el = document.createElement('div');
+      el.className = 'mk';
+      el.style.background = color;
+      el.innerHTML = '<span>' + (i + 1) + '</span>';
+
+      const navUrl = 'https://www.google.com/maps/dir/?api=1&destination=' + p.lat + ',' + p.lng + '&travelmode=driving';
+      const noteHtml = p.note ? '<p class="pu-note">' + escapeHtml(p.note) + '</p>' : '';
+      const popupHtml =
+        '<div class="pu">' +
+        '<p class="pu-title">' + (i + 1) + '. ' + escapeHtml(p.name) + '</p>' +
+        '<p class="pu-cat">' + escapeHtml(cat.label || p.category) + '</p>' +
+        noteHtml +
+        '<a class="pu-nav" target="_blank" rel="noopener" href="' + navUrl + '">🧭 導航</a>' +
+        '</div>';
+
+      new maplibregl.Marker({ element: el, anchor: 'bottom' })
+        .setLngLat([p.lng, p.lat])
+        .setPopup(new maplibregl.Popup({ offset: 24 }).setHTML(popupHtml))
+        .addTo(map);
+    });
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  function fitToPoints() {
+    if (!DATA.points.length) return;
+    const bounds = new maplibregl.LngLatBounds();
+    DATA.points.forEach((p) => bounds.extend([p.lng, p.lat]));
+    map.fitBounds(bounds, { padding: { top: 90, bottom: 140, left: 40, right: 40 }, pitch: 60, maxZoom: 18, duration: 0 });
+  }
+
+  // =========================================================
+  // 7. OSRM 路線（一次呼叫所有 waypoint，失敗退回點對點直線）
+  // =========================================================
+  async function buildRoute() {
+    const pts = DATA.points;
+    if (pts.length < 2) return;
+    const coordStr = pts.map((p) => p.lng + ',' + p.lat).join(';');
+    const url = 'https://router.project-osrm.org/route/v1/driving/' + coordStr + '?overview=full&geometries=geojson';
+
+    let geojsonCoords = null;
+    let osrmInfo = '';
+    try {
+      const res = await fetch(url);
+      osrmInfo = 'OSRM HTTP ' + res.status;
+      if (res.ok) {
+        const j = await res.json();
+        if (j.code === 'Ok' && j.routes && j.routes[0]) {
+          geojsonCoords = j.routes[0].geometry.coordinates;
+          osrmInfo += '（code=' + j.code + '，' + geojsonCoords.length + ' 點，' + Math.round(j.routes[0].distance) + 'm）';
+        } else {
+          osrmInfo += '（code=' + j.code + '，退回直線）';
+        }
+      }
+    } catch (e) {
+      osrmInfo = 'OSRM 呼叫失敗（' + e.message + '），退回直線';
+    }
+
+    if (!geojsonCoords) {
+      geojsonCoords = pts.map((p) => [p.lng, p.lat]); // 退回點對點直線
+    }
+
+    window.__osrmInfo = osrmInfo; // 供驗收腳本讀取
+    setStatus(osrmInfo);
+
+    const src = { type: 'Feature', geometry: { type: 'LineString', coordinates: geojsonCoords }, properties: {} };
+    if (map.getSource('route')) {
+      map.getSource('route').setData(src);
+    } else {
+      map.addSource('route', { type: 'geojson', data: src });
+      map.addLayer({
+        id: 'route-line',
+        type: 'line',
+        source: 'route',
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: { 'line-color': '#1a73e8', 'line-width': 5, 'line-opacity': 0.75 },
+      }, has3dBuilding ? 'building-3d' : undefined);
+    }
+  }
+
+  // =========================================================
+  // 8. GPS 棋子 + 跟隨 / 自由瀏覽
+  // =========================================================
+  let followMode = true;
+  let meLngLat = null;
+  let heading = null;
+  let watchId = null;
+  let compassStarted = false;
+
+  const meEl = document.createElement('div');
+  meEl.className = 'me-wrap';
+  meEl.innerHTML = '<div class="me-fan" id="me-fan" style="display:none"></div><div class="me-dot"></div>';
+  const meMarker = new maplibregl.Marker({ element: meEl, rotationAlignment: 'map', pitchAlignment: 'map' });
+
+  function updateMe(lat, lng) {
+    meLngLat = [lng, lat];
+    if (!meMarker._map) meMarker.setLngLat(meLngLat).addTo(map);
+    else meMarker.setLngLat(meLngLat);
+
+    if (followMode) {
+      map.easeTo({
+        center: meLngLat,
+        bearing: heading != null ? heading : map.getBearing(),
+        pitch: 60,
+        zoom: Math.min(18, Math.max(17, map.getZoom())),
+        duration: 700,
+      });
+    }
+  }
+
+  function updateHeading(h) {
+    heading = h;
+    const fan = $('#me-fan');
+    if (fan) fan.style.display = 'block';
+    meMarker.setRotation(h);
+    if (followMode && meLngLat) {
+      map.easeTo({ bearing: h, duration: 400 });
+    }
+  }
+
+  // ---- 真實 GPS ----
+  function startRealGeo() {
+    if (!('geolocation' in navigator)) { setStatus('此裝置不支援定位'); return; }
+    watchId = navigator.geolocation.watchPosition(
+      (pos) => updateMe(pos.coords.latitude, pos.coords.longitude),
+      (err) => toast('定位失敗：' + err.message, 3000),
+      { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 }
+    );
+  }
+
+  function startCompass() {
+    if (compassStarted) return;
+    compassStarted = true;
+    window.addEventListener('deviceorientationabsolute', onOrientation, true);
+    window.addEventListener('deviceorientation', onOrientation, true);
+  }
+  function onOrientation(e) {
+    let h = null;
+    if (typeof e.webkitCompassHeading === 'number' && !isNaN(e.webkitCompassHeading)) h = e.webkitCompassHeading;
+    else if (typeof e.alpha === 'number' && e.alpha !== null) h = (360 - e.alpha) % 360;
+    if (h == null || isNaN(h)) return;
+    updateHeading(h);
+  }
+
+  $('#btn-compass').addEventListener('click', async () => {
+    const D = window.DeviceOrientationEvent;
+    if (D && typeof D.requestPermission === 'function') {
+      try {
+        const res = await D.requestPermission();
+        if (res !== 'granted') { toast('未取得方向感應權限'); return; }
+      } catch (e) { toast('方向感應權限請求失敗'); return; }
+    }
+    startCompass();
+    $('#btn-compass').style.display = 'none';
+  });
+
+  // iOS 需要按鈕手勢才能要權限；先偵測是否需要顯示按鈕
+  if (window.DeviceOrientationEvent && typeof window.DeviceOrientationEvent.requestPermission === 'function') {
+    $('#btn-compass').style.display = 'inline-flex';
+  } else if (window.DeviceOrientationEvent) {
+    startCompass(); // Android 等不需明確授權
+  }
+
+  // ---- 模擬 GPS（?mock=1，桌機/無 GPS 環境測試跟隨模式用） ----
+  function startMockGeo() {
+    if (!DATA || !DATA.points.length) return;
+    let targetIdx = 0;
+    let target = DATA.points[0];
+    const start = destinationOf(target.lat, target.lng, 225, 200); // 目標西南方 200m 出發
+    let pos = { lat: start.lat, lng: start.lng };
+    setStatus('模擬定位：朝第 1 個點位前進中…');
+    const timer = setInterval(() => {
+      const d = haversine(pos.lat, pos.lng, target.lat, target.lng);
+      if (d > 2) {
+        const br = bearingOf(pos.lat, pos.lng, target.lat, target.lng);
+        const step = Math.min(8, d);
+        pos = destinationOf(pos.lat, pos.lng, br, step);
+        updateHeading(br);
+      } else {
+        targetIdx = (targetIdx + 1) % DATA.points.length;
+        target = DATA.points[targetIdx];
+        setStatus('模擬定位：朝第 ' + (targetIdx + 1) + ' 個點位前進中…');
+      }
+      updateMe(pos.lat, pos.lng);
+    }, 1000);
+    window.__mockTimer = timer;
+  }
+
+  // =========================================================
+  // 9. 控制鈕：跟隨 / 自由、定位
+  // =========================================================
+  function setFollowUI() {
+    const btn = $('#btn-follow');
+    btn.classList.toggle('on', followMode);
+    btn.innerHTML = followMode ? '<span class="ic">🎮</span>跟隨中' : '<span class="ic">🗺️</span>自由瀏覽';
+  }
+  setFollowUI();
+
+  $('#btn-follow').addEventListener('click', () => {
+    followMode = !followMode;
+    setFollowUI();
+    if (followMode && meLngLat) {
+      map.easeTo({ center: meLngLat, bearing: heading != null ? heading : map.getBearing(), pitch: 60, zoom: 17.5, duration: 700 });
+    }
+  });
+
+  $('#btn-locate').addEventListener('click', () => {
+    if (meLngLat) {
+      map.easeTo({ center: meLngLat, zoom: 17.5, pitch: 60, duration: 700 });
+    } else {
+      toast('尚未取得目前位置');
+    }
+  });
+
+  // 使用者手動拖曳/縮放地圖時自動切到自由瀏覽
+  ['dragstart', 'zoomstart', 'rotatestart', 'pitchstart'].forEach((ev) => {
+    map.on(ev, (e) => {
+      if (e.originalEvent && followMode) {
+        followMode = false;
+        setFollowUI();
+      }
+    });
+  });
+
+  // =========================================================
+  // 10. 啟動定位來源
+  // =========================================================
+  if (mockMode) {
+    startMockGeo();
+  } else if (DATA) {
+    startRealGeo();
+  }
+
+  window.__mapReady = map; // 供驗收腳本讀取
+})();
+</script>
+
+</body>
+</html>
