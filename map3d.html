@@ -48,10 +48,69 @@
   .fab .ic { font-size: 17px; }
 
   #status {
-    position: absolute; left: 12px; bottom: max(16px, env(safe-area-inset-bottom)); z-index: 6;
+    position: absolute; left: 12px; bottom: calc(max(16px, env(safe-area-inset-bottom)) + 54px); z-index: 6;
     background: rgba(20,20,24,.7); color: #fff; font-size: 11px; padding: 6px 10px; border-radius: 8px;
     max-width: 62vw; line-height: 1.5; pointer-events: none;
   }
+
+  /* ---- 底部抽屜點位清單 ---- */
+  #prog-cap {
+    position: absolute; left: 12px; bottom: max(16px, env(safe-area-inset-bottom)); z-index: 7;
+    height: 44px; padding: 0 16px; border-radius: 22px; border: none; display: none;
+    background: rgba(30,30,34,.85); color: #fff; font-size: 13px; font-weight: 600;
+    box-shadow: 0 2px 8px rgba(0,0,0,.35); backdrop-filter: blur(4px);
+  }
+  #prog-cap.avail { display: block; }
+  #drawer {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 8;
+    max-height: 45vh; background: #fff; color: #222;
+    border-radius: 16px 16px 0 0; box-shadow: 0 -4px 16px rgba(0,0,0,.25);
+    display: flex; flex-direction: column;
+    transform: translateY(105%); transition: transform .25s ease;
+  }
+  #drawer.open { transform: none; }
+  #drawer-head {
+    display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+    border-bottom: 1px solid #e8e8e8; flex: none;
+  }
+  #drawer-title { font-size: 14px; font-weight: 700; flex: 1; }
+  .dw-btn {
+    min-height: 40px; padding: 0 14px; border-radius: 10px; border: none;
+    font-size: 13px; font-weight: 600; background: #eef3fd; color: #1a56b8;
+  }
+  .dw-btn:active { background: #dbe7fb; }
+  #pt-list {
+    list-style: none; margin: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    padding: 0 0 max(8px, env(safe-area-inset-bottom));
+  }
+  .pt-row {
+    display: flex; align-items: center; gap: 8px; min-height: 52px;
+    padding: 4px 10px 4px 12px; border-bottom: 1px solid #f2f2f2; cursor: pointer;
+  }
+  .pt-row.done { opacity: .45; background: #fafafa; }
+  .pt-row.hl { background: #e8f0fe; }
+  .pt-num { font-weight: 700; min-width: 24px; text-align: right; color: #555; flex: none; font-size: 13px; }
+  .pt-color { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+  .pt-name {
+    flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-size: 13px;
+  }
+  .pt-check {
+    width: 40px; height: 40px; flex: none; display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  .pt-check input { width: 22px; height: 22px; accent-color: #1a73e8; }
+  .pt-btn {
+    min-width: 44px; height: 40px; flex: none; display: flex; align-items: center; justify-content: center;
+    border-radius: 10px; font-size: 12px; font-weight: 600; text-decoration: none;
+    background: #eef3fd; color: #1a56b8; padding: 0 8px;
+  }
+  .pt-btn:active { background: #dbe7fb; }
+
+  /* 完成/高亮的地圖 mark */
+  .mk { transition: transform .2s, opacity .2s, filter .2s; }
+  .mk.mk-done { filter: grayscale(1); opacity: .4; }
+  .mk.mk-hi { transform: rotate(-45deg) scale(1.5); z-index: 5; }
 
   #toast {
     position: absolute; left: 50%; top: 70px; transform: translateX(-50%) translateY(-10px);
@@ -79,18 +138,23 @@
     text-decoration: none; padding: 7px 12px; border-radius: 16px; font-size: 12px; font-weight: 600;
   }
 
-  /* ---- GPS 棋子 ---- */
-  .me-wrap { width: 1px; height: 1px; }
-  .me-dot {
-    position: absolute; left: -11px; top: -11px; width: 22px; height: 22px; border-radius: 50%;
-    background: #1a73e8; border: 3px solid #fff; box-shadow: 0 0 0 3px rgba(26,115,232,.35);
+  /* ---- GPS 棋子 ----
+     拆兩層：me-ground（貼地層，rotationAlignment/pitchAlignment=map，
+     含腳下陰影橢圓＋方向扇形，pitch 60 時會壓扁貼地、隨 heading 旋轉）
+     ＋ me-char（看板小人，viewport 對齊永遠面向螢幕、anchor=bottom 腳踩在定位點） */
+  .me-ground { width: 1px; height: 1px; }
+  .me-shadow {
+    position: absolute; left: -16px; top: -8px; width: 32px; height: 16px;
+    border-radius: 50%; background: rgba(0,0,0,.28);
   }
   .me-fan {
     position: absolute; left: -18px; top: -58px; width: 0; height: 0;
     border-left: 18px solid transparent; border-right: 18px solid transparent;
-    border-bottom: 40px solid rgba(26,115,232,.32);
+    border-bottom: 40px solid rgba(26,115,232,.38);
     transform-origin: 50% 100%;
   }
+  .me-char { width: 44px; height: 58px; pointer-events: none; }
+  .me-char svg { display: block; width: 100%; height: 100%; filter: drop-shadow(0 1px 2px rgba(0,0,0,.35)); }
 </style>
 </head>
 <body>
@@ -104,7 +168,7 @@
 
 <div id="hint">
   <div class="big">📍</div>
-  <p>找不到點位資料。<br>請用 SurveyARCam 產生的「分享連結」開啟本頁（網址需帶 <code>#d=…</code>）。</p>
+  <p id="hint-msg">找不到點位資料。請用 SurveyARCam 產生的「分享連結」開啟本頁（網址需帶 #d= 或 #z=）。</p>
 </div>
 
 <div id="toast"></div>
@@ -117,8 +181,19 @@
   <button class="fab" id="btn-follow"><span class="ic">🎮</span>自由瀏覽</button>
 </div>
 
+<button id="prog-cap">進度 0/0 ▲</button>
+
+<div id="drawer">
+  <div id="drawer-head">
+    <span id="drawer-title">進度 0/0</span>
+    <button class="dw-btn" id="btn-next">下一個未拍 ▶</button>
+    <button class="dw-btn" id="btn-collapse">收合 ▼</button>
+  </div>
+  <ul id="pt-list"></ul>
+</div>
+
 <script>
-(function () {
+(async function () {
   'use strict';
 
   // =========================================================
@@ -160,6 +235,33 @@
     } catch (e) {
       return { ok: false, error: '連結內的點位資料無法解析' };
     }
+  }
+
+  // #z= gzip 壓縮格式（base64url → DecompressionStream('gzip') → UTF-8 → JSON）；
+  // 無 z 參數時退回既有 #d= 同步路徑。
+  async function decodeAnyHash(hash) {
+    const h = String(hash || '').replace(/^#/, '');
+    if (!h) return { ok: false, error: '' };
+    let z = null;
+    try { z = new URLSearchParams(h).get('z'); } catch (e) { /* 交給 #d= 路徑 */ }
+    if (z) {
+      if (typeof DecompressionStream !== 'function') {
+        return { ok: false, error: '此瀏覽器不支援壓縮連結（#z=），請更新系統或改用長連結（#d=）' };
+      }
+      let bytes;
+      try { bytes = base64UrlToBytes(z); }
+      catch (e) { return { ok: false, error: '連結內的點位資料無法解析（base64 格式錯誤）' }; }
+      try {
+        const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+        const buf = await new Response(stream).arrayBuffer();
+        const jsonText = new TextDecoder('utf-8').decode(buf);
+        const d = JSON.parse(jsonText);
+        return { ok: true, data: d, jsonText };
+      } catch (e) {
+        return { ok: false, error: '連結內的點位資料無法解析（gzip 解壓或 JSON 格式錯誤）' };
+      }
+    }
+    return decodeHashData(hash);
   }
 
   function validateData(d) {
@@ -223,7 +325,7 @@
   // =========================================================
   // 4. 解析點位資料
   // =========================================================
-  const hashResult = decodeHashData(location.hash);
+  const hashResult = await decodeAnyHash(location.hash);
   let DATA = null;
   if (hashResult.ok) {
     const v = validateData(hashResult.data);
@@ -238,6 +340,7 @@
 
   if (!DATA) {
     $('#hint').classList.add('show');
+    if (hashResult.error) $('#hint-msg').textContent = hashResult.error;
   } else {
     $('#proj-name').textContent = DATA.project;
     $('#proj-sub').textContent = DATA.points.length + ' 個點位・' + (mockMode ? '模擬定位模式' : '');
@@ -297,6 +400,7 @@
 
     if (DATA) {
       addMarkers();
+      initDrawer();
       fitToPoints();
       buildRoute();
     }
@@ -309,6 +413,8 @@
   // =========================================================
   // 6. 點位標記
   // =========================================================
+  const ptMarkers = []; // { el, marker }，index 對應 DATA.points
+
   function addMarkers() {
     DATA.points.forEach((p, i) => {
       const cat = DATA.categories[p.category] || {};
@@ -328,10 +434,11 @@
         '<a class="pu-nav" target="_blank" rel="noopener" href="' + navUrl + '">🧭 導航</a>' +
         '</div>';
 
-      new maplibregl.Marker({ element: el, anchor: 'bottom' })
+      const marker = new maplibregl.Marker({ element: el, anchor: 'bottom' })
         .setLngLat([p.lng, p.lat])
         .setPopup(new maplibregl.Popup({ offset: 24 }).setHTML(popupHtml))
         .addTo(map);
+      ptMarkers.push({ el, marker });
     });
   }
 
@@ -344,6 +451,117 @@
     const bounds = new maplibregl.LngLatBounds();
     DATA.points.forEach((p) => bounds.extend([p.lng, p.lat]));
     map.fitBounds(bounds, { padding: { top: 90, bottom: 140, left: 40, right: 40 }, pitch: 60, maxZoom: 18, duration: 0 });
+  }
+
+  // =========================================================
+  // 6.5 底部抽屜點位清單（進度勾選存 localStorage）
+  // =========================================================
+  // 點集指紋：沿用 route_checklist 的 order|name|lat|lng rolling hash（h*31+c |0 → fp+hex）
+  function computeFingerprint(points) {
+    const s = points.map((p, i) => (i + 1) + '|' + p.name + '|' + p.lat + '|' + p.lng).join(';');
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+    return 'fp' + (h >>> 0).toString(16);
+  }
+
+  let progState = {};   // { "1": true, ... } key = 順序號（1 起算），同 route_checklist
+  let progKeyName = '';
+  const rowEls = [];    // index 對應 DATA.points
+
+  function loadProg() {
+    try { return JSON.parse(localStorage.getItem(progKeyName) || '{}') || {}; }
+    catch (e) { return {}; }
+  }
+  function saveProg() {
+    try { localStorage.setItem(progKeyName, JSON.stringify(progState)); }
+    catch (e) { /* 無痕模式等 localStorage 不可用時靜默略過 */ }
+  }
+  function doneCount() {
+    let n = 0;
+    for (let i = 0; i < DATA.points.length; i++) if (progState[i + 1]) n++;
+    return n;
+  }
+  function updateProgressUI() {
+    const txt = '進度 ' + doneCount() + '/' + DATA.points.length;
+    $('#prog-cap').textContent = txt + ' ▲';
+    $('#drawer-title').textContent = txt;
+  }
+  function applyRowState(i) {
+    const done = !!progState[i + 1];
+    if (rowEls[i]) {
+      rowEls[i].classList.toggle('done', done);
+      const cb = rowEls[i].querySelector('input');
+      if (cb) cb.checked = done;
+    }
+    if (ptMarkers[i]) ptMarkers[i].el.classList.toggle('mk-done', done);
+  }
+  function toggleDone(i) {
+    if (progState[i + 1]) delete progState[i + 1];
+    else progState[i + 1] = true;
+    saveProg();
+    applyRowState(i);
+    updateProgressUI();
+  }
+
+  function flyToPoint(i) {
+    const p = DATA.points[i];
+    map.flyTo({ center: [p.lng, p.lat], zoom: 17.5, pitch: map.getPitch(), duration: 900 });
+    if (ptMarkers[i]) {
+      ptMarkers[i].el.classList.add('mk-hi');
+      setTimeout(() => ptMarkers[i].el.classList.remove('mk-hi'), 1600);
+    }
+  }
+
+  function setDrawerOpen(open) {
+    $('#drawer').classList.toggle('open', open);
+  }
+
+  function initDrawer() {
+    progKeyName = 'map3d_' + computeFingerprint(DATA.points);
+    progState = loadProg();
+
+    const list = $('#pt-list');
+    DATA.points.forEach((p, i) => {
+      const cat = DATA.categories[p.category] || {};
+      const li = document.createElement('li');
+      li.className = 'pt-row';
+      const navUrl = 'https://www.google.com/maps/dir/?api=1&destination=' + p.lat + ',' + p.lng + '&travelmode=driving';
+      const camUrl = './index.html' + location.hash; // 同源 ARCam，帶相同 #d=/#z=
+      li.innerHTML =
+        '<span class="pt-num">' + (i + 1) + '</span>' +
+        '<span class="pt-color" style="background:' + (cat.color || '#1a73e8') + '"></span>' +
+        '<span class="pt-name">' + escapeHtml(p.name) + '</span>' +
+        '<label class="pt-check"><input type="checkbox" aria-label="完成"></label>' +
+        '<a class="pt-btn pt-nav" target="_blank" rel="noopener" href="' + navUrl + '">導航</a>' +
+        '<a class="pt-btn pt-cam" target="_blank" rel="noopener" href="' + camUrl + '">拍照</a>';
+
+      li.querySelector('input').addEventListener('change', () => toggleDone(i));
+      li.addEventListener('click', (e) => {
+        if (e.target.closest('a, label, input')) return; // 按鈕/勾選不觸發 flyTo
+        flyToPoint(i);
+      });
+      list.appendChild(li);
+      rowEls.push(li);
+      applyRowState(i);
+    });
+
+    updateProgressUI();
+    $('#prog-cap').classList.add('avail');
+
+    $('#prog-cap').addEventListener('click', () => setDrawerOpen(true));
+    $('#btn-collapse').addEventListener('click', () => setDrawerOpen(false));
+    $('#btn-next').addEventListener('click', () => {
+      let idx = -1;
+      for (let i = 0; i < DATA.points.length; i++) {
+        if (!progState[i + 1]) { idx = i; break; }
+      }
+      if (idx < 0) { toast('全部點位都完成了 🎉'); return; }
+      flyToPoint(idx);
+      const row = rowEls[idx];
+      row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      row.classList.add('hl');
+      setTimeout(() => row.classList.remove('hl'), 1600);
+    });
   }
 
   // =========================================================
@@ -404,15 +622,57 @@
   let watchId = null;
   let compassStarted = false;
 
-  const meEl = document.createElement('div');
-  meEl.className = 'me-wrap';
-  meEl.innerHTML = '<div class="me-fan" id="me-fan" style="display:none"></div><div class="me-dot"></div>';
-  const meMarker = new maplibregl.Marker({ element: meEl, rotationAlignment: 'map', pitchAlignment: 'map' });
+  // 地面層：腳下陰影 + 方向扇形（貼地、隨 heading 旋轉）
+  const groundEl = document.createElement('div');
+  groundEl.className = 'me-ground';
+  groundEl.innerHTML = '<div class="me-shadow"></div><div class="me-fan" id="me-fan" style="display:none"></div>';
+  const groundMarker = new maplibregl.Marker({ element: groundEl, rotationAlignment: 'map', pitchAlignment: 'map' });
+
+  // 看板小人：外業背心 Q 版角色，雙手持相機在胸前（內嵌 SVG，無外部資源）
+  const charEl = document.createElement('div');
+  charEl.className = 'me-char';
+  charEl.innerHTML =
+    '<svg viewBox="0 0 44 58" xmlns="http://www.w3.org/2000/svg" aria-label="我的位置">' +
+    // 腿 + 鞋
+    '<rect x="15" y="35" width="5.5" height="15" rx="2.2" fill="#3a4551"/>' +
+    '<rect x="23.5" y="35" width="5.5" height="15" rx="2.2" fill="#3a4551"/>' +
+    '<rect x="13.6" y="49" width="8" height="5" rx="2.4" fill="#23282e"/>' +
+    '<rect x="22.4" y="49" width="8" height="5" rx="2.4" fill="#23282e"/>' +
+    // 身體：外業背心（橘）＋ 反光條（黃）
+    '<rect x="12.5" y="18.5" width="19" height="18.5" rx="4.5" fill="#f5871f"/>' +
+    '<rect x="12.5" y="23.5" width="19" height="2.6" fill="#ffd23e"/>' +
+    '<rect x="12.5" y="31.5" width="19" height="2.6" fill="#ffd23e"/>' +
+    // 手臂（膚色，往胸前收）
+    '<path d="M13.5 22 Q10 26 16 28.5" stroke="#f6c9a0" stroke-width="4" fill="none" stroke-linecap="round"/>' +
+    '<path d="M30.5 22 Q34 26 28 28.5" stroke="#f6c9a0" stroke-width="4" fill="none" stroke-linecap="round"/>' +
+    // 相機（深灰機身＋鏡頭＋觀景窗；縮小讓橘背心露出）
+    '<rect x="16.5" y="25.5" width="11" height="8" rx="1.8" fill="#2d3238"/>' +
+    '<rect x="18.5" y="24" width="5" height="2.2" rx="0.9" fill="#2d3238"/>' +
+    '<circle cx="22" cy="29.5" r="2.8" fill="#171a1d"/>' +
+    '<circle cx="22" cy="29.5" r="1.6" fill="#4f7cae"/>' +
+    '<circle cx="21.2" cy="28.6" r="0.6" fill="#bcd6ee"/>' +
+    '<rect x="25.4" y="26.6" width="1.6" height="1.3" rx="0.4" fill="#e5554f"/>' +
+    // 手（握相機兩側）
+    '<circle cx="16.5" cy="29.5" r="2.2" fill="#f6c9a0"/>' +
+    '<circle cx="27.5" cy="29.5" r="2.2" fill="#f6c9a0"/>' +
+    // 頭 + 頭髮
+    '<circle cx="22" cy="10.5" r="8.2" fill="#f6c9a0"/>' +
+    '<path d="M13.8 10.5 Q13.8 2.3 22 2.3 Q30.2 2.3 30.2 10.5 Q30.2 7.2 22 6.8 Q13.8 7.2 13.8 10.5 Z" fill="#4a3628"/>' +
+    // 眼睛（面向使用者）
+    '<circle cx="19" cy="11.5" r="1.1" fill="#2d2d2d"/>' +
+    '<circle cx="25" cy="11.5" r="1.1" fill="#2d2d2d"/>' +
+    '</svg>';
+  const meMarker = new maplibregl.Marker({ element: charEl, anchor: 'bottom' }); // viewport 對齊＝billboard
 
   function updateMe(lat, lng) {
     meLngLat = [lng, lat];
-    if (!meMarker._map) meMarker.setLngLat(meLngLat).addTo(map);
-    else meMarker.setLngLat(meLngLat);
+    if (!meMarker._map) {
+      groundMarker.setLngLat(meLngLat).addTo(map);
+      meMarker.setLngLat(meLngLat).addTo(map);
+    } else {
+      groundMarker.setLngLat(meLngLat);
+      meMarker.setLngLat(meLngLat);
+    }
 
     if (followMode) {
       map.easeTo({
@@ -429,7 +689,7 @@
     heading = h;
     const fan = $('#me-fan');
     if (fan) fan.style.display = 'block';
-    meMarker.setRotation(h);
+    groundMarker.setRotation(h); // 只轉腳下扇形，小人本體維持看板不旋轉
     if (followMode && meLngLat) {
       map.easeTo({ bearing: h, duration: 400 });
     }
@@ -549,7 +809,11 @@
   }
 
   window.__mapReady = map; // 供驗收腳本讀取
-})();
+})().catch((e) => {
+  console.error('[init error]', e);
+  const el = document.getElementById('toast');
+  if (el) { el.textContent = '初始化失敗：' + e.message; el.classList.add('show'); }
+});
 </script>
 
 </body>

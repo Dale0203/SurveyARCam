@@ -170,23 +170,49 @@
     return bytes;
   }
 
-  // 解析 location.hash（含或不含開頭 #），回傳：
-  //   {ok:true, data, jsonText}                 — 有 d= 且成功解出合法 JSON
-  //   {ok:false, error:''}                       — 沒有 d= 參數（非錯誤，交給下一順位）
-  //   {ok:false, error:'中文錯誤訊息'}            — 有 d= 但解碼/解析失敗
-  function decodeHashData(hash) {
+  // gzip bytes → 原始 bytes（原生 DecompressionStream，Chrome 80+/iOS 16.4+）
+  async function gunzipBytes(bytes) {
+    const ds = new DecompressionStream('gzip');
+    const stream = new Blob([bytes]).stream().pipeThrough(ds);
+    const buf = await new Response(stream).arrayBuffer();
+    return new Uint8Array(buf);
+  }
+
+  // 解析 location.hash（含或不含開頭 #），回傳 Promise：
+  //   {ok:true, data, jsonText}                 — 有 z=/d= 且成功解出合法 JSON
+  //   {ok:false, error:''}                       — 沒有 z=/d= 參數（非錯誤，交給下一順位）
+  //   {ok:false, error:'中文錯誤訊息'}            — 有 z=/d= 但解碼/解析失敗
+  // z= 為 gzip 壓縮短連結（避免 LINE 截斷）；d= 為舊版無壓縮長連結，完全保留相容。
+  // 注意：DecompressionStream 是 async，本函式因此為 async；唯一呼叫端 boot() 已改 await。
+  async function decodeHashData(hash) {
     try {
       const h = String(hash || '').replace(/^#/, '');
       if (!h) return { ok: false, error: '' };
       const params = new URLSearchParams(h);
-      const raw = params.get('d');
-      if (!raw) return { ok: false, error: '' };
+      const rawZ = params.get('z');
+      const rawD = params.get('d');
+      if (!rawZ && !rawD) return { ok: false, error: '' };
 
       let bytes;
       try {
-        bytes = base64UrlToBytes(raw);
+        bytes = base64UrlToBytes(rawZ || rawD);
       } catch (e) {
         return { ok: false, error: '連結內的點位資料無法解析（base64 格式錯誤）' };
+      }
+
+      if (rawZ) {
+        if (typeof DecompressionStream === 'undefined') {
+          // 舊瀏覽器（如 iOS <16.4）沒有原生解壓能力
+          return {
+            ok: false,
+            error: '此瀏覽器不支援壓縮連結（#z=）。請更新系統，或改用長連結（#d=）版本。',
+          };
+        }
+        try {
+          bytes = await gunzipBytes(bytes);
+        } catch (e) {
+          return { ok: false, error: '連結內的點位資料無法解析（解壓縮失敗）' };
+        }
       }
 
       let jsonText;
@@ -936,8 +962,8 @@
     bindEvents();
     if (mock) $('#mock-badge').classList.remove('hidden');
 
-    // 優先序 1：hash 分享連結 #d=（不清 hash，方便再轉傳）
-    const hashResult = decodeHashData(location.hash);
+    // 優先序 1：hash 分享連結 #z=（gzip 壓縮短版）或 #d=（舊版長連結）（不清 hash，方便再轉傳）
+    const hashResult = await decodeHashData(location.hash);
     if (hashResult.ok) {
       try {
         applyData(hashResult.data, hashResult.jsonText);
